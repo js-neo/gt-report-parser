@@ -1,7 +1,12 @@
 // src/lib/excelParser.ts
 
 import ExcelJS from 'exceljs';
-import type { ExcelData, ColumnConfig } from './types';
+import type { ExcelData, ColumnConfig, ProcessedData } from './types';
+
+const adjustForMoscowTime = (date: Date): Date => {
+    const moscowOffset = 3 * 60 * 60 * 1000;
+    return new Date(date.getTime() + moscowOffset);
+};
 
 export const parseExcelFile = async (file: File): Promise<ExcelData> => {
     const arrayBuffer = await file.arrayBuffer();
@@ -24,7 +29,40 @@ export const parseExcelFile = async (file: File): Promise<ExcelData> => {
 
         const rowData: Record<string, unknown> = {};
         row.eachCell((cell, colNumber) => {
-            rowData[headers[colNumber - 1]] = cell.value;
+            const header = headers[colNumber - 1];
+
+
+            if (cell.type === ExcelJS.ValueType.Date) {
+                const dateValue = cell.value as Date;
+                rowData[header] = adjustForMoscowTime(dateValue);
+            }
+
+            else if (typeof cell.value === 'number' && cell.value > 10000) {
+                try {
+
+                    const excelDate = new Date((cell.value - 25569) * 86400 * 1000);
+                    rowData[header] = adjustForMoscowTime(excelDate);
+                } catch {
+                    rowData[header] = cell.value;
+                }
+            }
+
+            else if (typeof cell.value === 'string' && cell.value.match(/\d{4}-\d{2}-\d{2}/)) {
+                try {
+                    const dateValue = new Date(cell.value);
+                    if (!isNaN(dateValue.getTime())) {
+                        rowData[header] = adjustForMoscowTime(dateValue);
+                    } else {
+                        rowData[header] = cell.value;
+                    }
+                } catch {
+                    rowData[header] = cell.value;
+                }
+            }
+
+            else {
+                rowData[header] = cell.value;
+            }
         });
         rows.push(rowData);
     });
@@ -43,10 +81,41 @@ export const processExcelData = async (
 
     data.rows.forEach(row => {
         const processedRow = columns.map(config => {
-            return config.visible ? row[config.id] : null;
+            if (!config.visible) return null;
+
+            const value = row[config.id];
+            return value instanceof Date ? adjustForMoscowTime(value) : value;
         });
         worksheet.addRow(processedRow);
     });
 
+    await workbook.xlsx.writeBuffer();
+};
+
+export const exportToExcel = async (data: ProcessedData, fileName: string) => {
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Sheet 1');
+
+    worksheet.addRow(data.headers);
+
+    data.rows.forEach(row => {
+        const rowData = data.headers.map(header => {
+            const value = row[header];
+            return value instanceof Date ? adjustForMoscowTime(value) : value;
+        });
+        worksheet.addRow(rowData);
+    });
+
     const buffer = await workbook.xlsx.writeBuffer();
+    const blob = new Blob([buffer], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    });
+
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${fileName}.xlsx`;
+    a.click();
+
+    URL.revokeObjectURL(url);
 };

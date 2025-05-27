@@ -11,3 +11,13 @@ export interface ColumnConfig {
     visible: boolean;
 }
 
+export interface ProcessedData {
+    headers: string[];
+    rows: Record<string, unknown>[];
+}
+
+export interface ExcelParser {
+    parseExcelFile: (file: File) => Promise<ExcelData>;
+    processExcelData: (data: ExcelData, columns: ColumnConfig[]) => Promise<void>;
+    exportToExcel: (data: ProcessedData, fileName: string) => Promise<void>;
+}

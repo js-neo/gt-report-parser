@@ -2,14 +2,15 @@
 
 "use client"
 
-import { useState, useCallback } from 'react';
+import {useState, useCallback, useEffect} from 'react';
 import { useRouter } from 'next/navigation';
 import {FileUpload} from '@/components/FileUpload';
 import {ColumnEditor} from '@/components/ColumnEditor';
 import { Button } from '@/components/UI/Button';
-import { processExcelData } from '@/lib/excelParser';
 import type { ExcelData, ColumnConfig } from '@/lib/types';
 import {ProgressBar} from "@/components/UI/ProgressBar";
+import {formatDateTime} from "@/utils";
+import {processExcelData} from "@/lib/excelParser";
 
 export default function Home() {
     const [excelData, setExcelData] = useState<ExcelData | null>(null);
@@ -17,6 +18,23 @@ export default function Home() {
     const [isProcessing, setIsProcessing] = useState(false);
     const [progress, setProgress] = useState(0);
     const router = useRouter();
+
+    useEffect(() => {
+        const savedPreviewData = sessionStorage.getItem('savedPreviewData');
+        if (savedPreviewData) {
+            const parsedData = JSON.parse(savedPreviewData);
+            setExcelData({
+                headers: parsedData.headers,
+                rows: parsedData.rows
+            });
+            setColumns(parsedData.headers.map((header: string) => ({
+                id: header,
+                name: header,
+                visible: true
+            })));
+            sessionStorage.removeItem('savedPreviewData');
+        }
+    }, []);
 
     const handleFileUpload = useCallback((data: ExcelData) => {
         setExcelData(data);
@@ -27,7 +45,37 @@ export default function Home() {
         })));
     }, []);
 
+    const processAndSaveData = (columns: ColumnConfig[], data: ExcelData) => {
+        const columnMapping = columns.reduce((acc, column) => {
+            if (column.visible) {
+                acc[column.id] = column.name;
+            }
+            return acc;
+        }, {} as Record<string, string>);
+
+        const processedData = {
+            headers: Object.values(columnMapping),
+            rows: data.rows.map(row => {
+                const processedRow: Record<string, unknown> = {};
+                for (const [originalId, newName] of Object.entries(columnMapping)) {
+
+                    if (row[originalId] instanceof Date) {
+                        processedRow[newName] = formatDateTime(row[originalId] as Date);
+                    } else {
+                        processedRow[newName] = row[originalId];
+                    }
+                }
+                return processedRow;
+            })
+        };
+
+        sessionStorage.setItem('processedData', JSON.stringify(processedData));
+        return processedData;
+    };
+
     const handleProcess = async () => {
+        if (!excelData) return;
+
         setIsProcessing(true);
         setProgress(0);
 
@@ -42,7 +90,9 @@ export default function Home() {
                 });
             }, 300);
 
-            await processExcelData(excelData!, columns);
+            await processExcelData(excelData, columns);
+
+            processAndSaveData(columns, excelData);
 
             clearInterval(interval);
             setProgress(100);
@@ -51,6 +101,12 @@ export default function Home() {
             console.error('Processing error:', error);
             setIsProcessing(false);
         }
+    };
+
+    const handlePreview = () => {
+        if (!excelData) return;
+        processAndSaveData(columns, excelData);
+        router.push('/preview');
     };
 
     return (
@@ -69,7 +125,7 @@ export default function Home() {
                     <div className="flex gap-4">
                         <Button
                             variant="outline"
-                            onClick={() => router.push('/preview')}
+                            onClick={handlePreview}
                         >
                             Предпросмотр
                         </Button>

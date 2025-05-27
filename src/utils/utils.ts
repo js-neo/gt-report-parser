@@ -16,3 +16,20 @@ import { twMerge } from 'tailwind-merge';
 export function cn(...inputs: ClassValue[]) {
     return twMerge(clsx(inputs));
 }
+
+export const formatDateTime = (date: Date | string): string => {
+    const d = typeof date === 'string' ? new Date(date) : date;
+
+    if (isNaN(d.getTime())) return String(date);
+
+    const correctedDate = new Date(d);
+    correctedDate.setHours(correctedDate.getHours() - 3);
+
+    const day = String(correctedDate.getDate()).padStart(2, '0');
+    const month = String(correctedDate.getMonth() + 1).padStart(2, '0');
+    const year = correctedDate.getFullYear();
+    const hours = String(correctedDate.getHours()).padStart(2, '0');
+    const minutes = String(correctedDate.getMinutes()).padStart(2, '0');
+
+    return `${day}.${month}.${year} ${hours}:${minutes}`;
+};
