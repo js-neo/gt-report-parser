@@ -1,5 +1,4 @@
 // src/app/preview/page.tsx
-
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -7,7 +6,8 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/UI/Button';
 import { exportToExcel } from "@/lib/excelParser";
 import { FileUp } from 'lucide-react';
-import {formatDateTime} from "@/utils";
+import { formatDateTime } from "@/utils";
+import { cn } from "@/utils";
 
 export default function PreviewPage() {
     const router = useRouter();
@@ -31,6 +31,17 @@ export default function PreviewPage() {
             sessionStorage.setItem('savedPreviewData', savedData);
         }
         router.push('/');
+    };
+
+    const isWideColumn = (header: string) => {
+        const wideColumnKeywords = ['адрес', 'комментарий', 'comment', 'описание', 'description'];
+        return wideColumnKeywords.some(keyword =>
+            header.toLowerCase().includes(keyword)
+        );
+    };
+
+    const isTimeColumn = (header: string) => {
+        return header.toLowerCase().includes('время');
     };
 
     if (!tableData) {
@@ -57,8 +68,7 @@ export default function PreviewPage() {
                         onClick={() => exportToExcel(tableData, 'processed-report')}
                         className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white"
                     >
-                        <FileUp className="h-4 w-4" />
-                        Экспорт в Excel
+                        <span className="flex"><FileUp className="w-4 mr-1" />Экспорт в Excel</span>
                     </Button>
                 </div>
             </div>
@@ -70,7 +80,10 @@ export default function PreviewPage() {
                         {tableData.headers.map((header, index) => (
                             <th
                                 key={index}
-                                className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider"
+                                className={cn(
+                                    "px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider",
+                                    isWideColumn(header) && "max-w-[400px]"
+                                )}
                             >
                                 {header}
                             </th>
@@ -86,9 +99,14 @@ export default function PreviewPage() {
                             {tableData.headers.map((header, colIndex) => (
                                 <td
                                     key={colIndex}
-                                    className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100"
+                                    className={cn(
+                                        "px-6 py-4 text-sm text-gray-900 dark:text-gray-100",
+                                        isWideColumn(header)
+                                            ? "max-w-[400px] break-words whitespace-normal"
+                                            : "whitespace-nowrap"
+                                    )}
                                 >
-                                    {typeof row[header] === 'string' && row[header].toString().includes('T')
+                                    {isTimeColumn(header) && typeof row[header] === 'string' && row[header].toString().includes('T')
                                         ? formatDateTime(new Date(row[header] as string))
                                         : String(row[header] || '')}
                                 </td>
