@@ -74,15 +74,17 @@ export default function PreviewPage() {
             </div>
 
             <div className="overflow-x-auto shadow-md rounded-lg">
-                <table className="min-w-full bg-white dark:bg-gray-800">
+                <table className="min-w-full bg-background border border-border border-collapse border-gray-300 dark:border-gray-600">
                     <thead className="bg-gray-100 dark:bg-gray-700">
                     <tr>
                         {tableData.headers.map((header, index) => (
                             <th
                                 key={index}
                                 className={cn(
-                                    "px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider",
-                                    isWideColumn(header) && "max-w-[400px]"
+                                    "px-3 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider border border-border border-gray-300 dark:border-gray-600",
+                                    isWideColumn(header)
+                                        ? "max-w-[400px] min-w-[400]"
+                                        : "max-w-[150px] min-w-[150]"
                                 )}
                             >
                                 {header}
@@ -90,20 +92,20 @@ export default function PreviewPage() {
                         ))}
                     </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                    <tbody className="divide-y divide-border">
                     {tableData.rows.map((row, rowIndex) => (
                         <tr
                             key={rowIndex}
-                            className={rowIndex % 2 === 0 ? 'bg-white dark:bg-gray-800' : 'bg-gray-50 dark:bg-gray-700'}
+                            className={rowIndex % 2 === 0 ? 'bg-background' : 'bg-gray-50 dark:bg-gray-700'}
                         >
                             {tableData.headers.map((header, colIndex) => (
                                 <td
                                     key={colIndex}
                                     className={cn(
-                                        "px-6 py-4 text-sm text-gray-900 dark:text-gray-100",
+                                        "px-3 py-2 text-sm text-foreground border border-border border-gray-300 dark:border-gray-600",
                                         isWideColumn(header)
-                                            ? "max-w-[400px] break-words whitespace-normal"
-                                            : "whitespace-nowrap"
+                                            ? "max-w-[400px] min-w-[400] break-words whitespace-normal"
+                                            : "max-w-[150px] min-w-[150] break-words whitespace-normal"
                                     )}
                                 >
                                     {isTimeColumn(header) && typeof row[header] === 'string' && row[header].toString().includes('T')

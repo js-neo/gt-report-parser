@@ -10,22 +10,22 @@ import { parseExcelFile } from '@/lib/excelParser';
 import {cn} from "@/utils";
 
 interface FileUploadProps {
-    onUpload: (data: ExcelData) => void;
+    onUploadAction: (data: ExcelData) => void;
 }
 
-export const FileUpload = ({ onUpload }: FileUploadProps) => {
+export const FileUpload = ({ onUploadAction }: FileUploadProps) => {
     const onDrop = useCallback(async (acceptedFiles: File[]) => {
         const file = acceptedFiles[0];
         if (!file) return;
 
         try {
             const data = await parseExcelFile(file);
-            onUpload(data);
+            onUploadAction(data);
         } catch (error) {
             console.error('Error parsing Excel:', error);
             alert('Ошибка при чтении файла');
         }
-    }, [onUpload]);
+    }, [onUploadAction]);
 
     const { getRootProps, getInputProps, isDragActive } = useDropzone({
         onDrop,

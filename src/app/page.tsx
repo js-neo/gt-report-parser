@@ -114,7 +114,7 @@ export default function Home() {
             <h1 className="text-3xl font-bold mb-6">GT-Report Parser</h1>
 
             {!excelData ? (
-                <FileUpload onUpload={handleFileUpload} />
+                <FileUpload onUploadAction={handleFileUpload} />
             ) : (
                 <div className="space-y-6">
                     <ColumnEditor

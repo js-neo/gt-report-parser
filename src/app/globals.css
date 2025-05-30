@@ -1,72 +1,35 @@
-/*src/app/globals.css*/
+/* src/app/globals.css */
 
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+    --background: 255, 0, 0;
+    --foreground: 255, 255, 0;
+    --border: 0, 0, 255;
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+    .dark {
+        --background: 0, 255, 0;
+        --foreground: 255, 0, 255;
+        --border: 255, 255, 0;
+    }
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
 }
 
-th{
-  width: 150px;
-  padding: 12px 5px;
-  text-align: center;
-  border: 1px solid #e5e7eb;
-  word-break: break-word;
-  overflow-wrap: anywhere;
-  white-space: normal !important;
-}
+.bg-custom { background-color: rgb(var(--background)); }
+.text-custom { color: rgb(var(--foreground)); }
+.border-custom { border-color: rgb(var(--border)); }
 
-.dark th, .dark td {
-  border-color: #374151;
-}
 
-tr:last-child td {
-  border-bottom: none;
+@layer utilities {
+    .bg-custom-50 {
+        background-color: rgba(var(--background), 0.5);
+    }
+    .bg-custom-80 {
+        background-color: rgba(var(--background), 0.8);
+    }
 }
-
-td.max-w-\[400px\], th.max-w-\[400px\] {
-  width: 400px;
-  word-break: break-word;
-  overflow-wrap: anywhere;
-  white-space: normal !important;
-}
-
-table {
-  width: 100%;
-  table-layout: fixed;
-}
-
-td {
-  width: 150px;
-  vertical-align: top;
-  padding: 0.75rem 15px;
-  text-align: left;
-  border: 1px solid #e5e7eb;
-  word-break: break-word;
-  overflow-wrap: anywhere;
-  white-space: normal !important;
-}
-
-th:nth-child(1), td:nth-child(1) { width: 100px; }
-th:nth-child(3), td:nth-child(3) { width: 100px; }
