@@ -8,6 +8,96 @@ const adjustForMoscowTime = (date: Date): Date => {
     return new Date(date.getTime() + moscowOffset);
 };
 
+const widthColumns = [
+    {key: 'Номер заказа', width: 130},
+    {key: 'Время заказа', width: 230},
+    {key: 'Стоимость', width: 150},
+    {key: 'Заказчик', width: 270},
+    {key: 'Адрес', width: 680},
+    {key: 'Исполнитель', width: 270},
+    {key: 'Автомобиль', width: 270},
+    {key: 'Комментарий', width: 680},
+    {key: 'Клиент', width: 270},
+    {key: 'Подключал', width: 270},
+    {key: 'Доплата', width: 270},
+];
+
+const numericColumns = ['Стоимость', 'Доплата'];
+
+const isNumericColumn = (header: string) => {
+    return numericColumns.some(numericHeader =>
+        header.toLowerCase().includes(numericHeader.toLowerCase())
+    );
+};
+
+const applyWorksheetFormatting = (worksheet: ExcelJS.Worksheet, headers: string[]) => {
+
+    headers.forEach((header, index) => {
+        const widthConfig = widthColumns.find(w => header.includes(w.key));
+        worksheet.getColumn(index + 1).width = widthConfig ? widthConfig.width / 12 : 20;
+        if (isNumericColumn(header)) {
+            worksheet.getColumn(index + 1).numFmt = '#,##0.00';
+        }
+    });
+
+    const headerRow = worksheet.getRow(1);
+    headerRow.eachCell((cell) => {
+        cell.fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: 'FFE6FFE6' }
+        };
+        cell.font = {
+            bold: true,
+            size: 12,
+            name: 'Arial'
+        };
+        cell.alignment = {
+            vertical: 'middle',
+            horizontal: 'center',
+            wrapText: true
+        };
+        cell.border = {
+            top: { style: 'thin' },
+            left: { style: 'thin' },
+            bottom: { style: 'thin' },
+            right: { style: 'thin' }
+        };
+    });
+
+    worksheet.eachRow((row, rowNumber) => {
+        if (rowNumber === 1) return;
+        const isEvenRow = rowNumber % 2 === 0;
+        const rowFillColor = isEvenRow ? 'FFF2F2F2' : 'FFFFFFFF';
+
+        row.eachCell((cell, colNumber) => {
+            const header = headers[colNumber - 1];
+
+            if (cell.value === null || cell.value === undefined || cell.value === '' ||
+                (typeof cell.value === 'string' && cell.value.trim() === '')) {
+                cell.value = isNumericColumn(header) ? 0 : '-';
+            }
+
+            cell.fill = {
+                type: 'pattern',
+                pattern: 'solid',
+                fgColor: { argb: rowFillColor }
+            };
+            cell.alignment = {
+                vertical: 'middle',
+                horizontal: 'center',
+                wrapText: true
+            };
+            cell.border = {
+                top: { style: 'thin' },
+                left: { style: 'thin' },
+                bottom: { style: 'thin' },
+                right: { style: 'thin' }
+            };
+        });
+    });
+};
+
 export const parseExcelFile = async (file: File): Promise<ExcelData> => {
     const arrayBuffer = await file.arrayBuffer();
     const workbook = new ExcelJS.Workbook();
@@ -27,8 +117,6 @@ export const parseExcelFile = async (file: File): Promise<ExcelData> => {
     const isTimeColumn = headers.map(header =>
         header.toLowerCase().includes('время')
     );
-
-    console.log("isTimeColumn: ", isTimeColumn);
 
     worksheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
         if (rowNumber === 1) return;
@@ -101,12 +189,14 @@ export const processExcelData = async (
         worksheet.addRow(processedRow);
     });
 
+    applyWorksheetFormatting(worksheet, columns.map(c => c.name));
+
     await workbook.xlsx.writeBuffer();
 };
 
 export const exportToExcel = async (data: ProcessedData, fileName: string) => {
     const workbook = new ExcelJS.Workbook();
-    const worksheet = workbook.addWorksheet('Sheet 1');
+    const worksheet = workbook.addWorksheet('Отчёт');
     const isTimeColumn = data.headers.map(header =>
         header.toLowerCase().includes('время')
     );
@@ -115,13 +205,21 @@ export const exportToExcel = async (data: ProcessedData, fileName: string) => {
 
     data.rows.forEach(row => {
         const rowData = data.headers.map((header, index) => {
-            const value = row[header];
-            return isTimeColumn[index] && value instanceof Date
-                ? adjustForMoscowTime(value)
-                : value;
+            let value = row[header];
+            if (value === null || value === undefined || value === '' ||
+                (typeof value === 'string' && value.trim() === '')) {
+                value = isNumericColumn(header) ? 0 : '-';
+            }
+            if (isTimeColumn[index] && value instanceof Date) {
+                return adjustForMoscowTime(value);
+            }
+
+            return value;
         });
         worksheet.addRow(rowData);
     });
+
+    applyWorksheetFormatting(worksheet, data.headers);
 
     const buffer = await workbook.xlsx.writeBuffer();
     const blob = new Blob([buffer], {

@@ -7,25 +7,38 @@ import { Button } from '@/components/UI/Button';
 import { FileUp } from 'lucide-react';
 import type { ExcelData } from '@/lib/types';
 import { parseExcelFile } from '@/lib/excelParser';
-import {cn} from "@/utils";
+import { cn } from "@/utils";
 
 interface FileUploadProps {
     onUploadAction: (data: ExcelData) => void;
+    acceptOnly?: string[];
 }
 
-export const FileUpload = ({ onUploadAction }: FileUploadProps) => {
+export const FileUpload = ({ onUploadAction, acceptOnly }: FileUploadProps) => {
     const onDrop = useCallback(async (acceptedFiles: File[]) => {
         const file = acceptedFiles[0];
         if (!file) return;
 
         try {
             const data = await parseExcelFile(file);
+
+            if (acceptOnly) {
+                const missingHeaders = acceptOnly.filter(header =>
+                    !data.headers.some(h => h.toLowerCase().includes(header.toLowerCase()))
+                );
+
+                if (missingHeaders.length > 0) {
+                    alert(`В файле отсутствуют обязательные колонки: ${missingHeaders.join(', ')}`);
+                    return;
+                }
+            }
+
             onUploadAction(data);
         } catch (error) {
             console.error('Error parsing Excel:', error);
             alert('Ошибка при чтении файла');
         }
-    }, [onUploadAction]);
+    }, [onUploadAction, acceptOnly]);
 
     const { getRootProps, getInputProps, isDragActive } = useDropzone({
         onDrop,
