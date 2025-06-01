@@ -5,7 +5,7 @@ import type { ExcelData, ColumnConfig, ProcessedData } from './types';
 
 const adjustForMoscowTime = (date: Date): Date => {
     const moscowOffset = 3 * 60 * 60 * 1000;
-    return new Date(date.getTime() + moscowOffset);
+    return new Date(date.getTime() - moscowOffset);
 };
 
 const widthColumns = [

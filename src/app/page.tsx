@@ -4,6 +4,7 @@
 
 import {useState, useCallback, useEffect} from 'react';
 import { useRouter } from 'next/navigation';
+import { Check, X } from 'lucide-react';
 import {FileUpload} from '@/components/FileUpload';
 import {ColumnEditor} from '@/components/ColumnEditor';
 import { Button } from '@/components/UI/Button';
@@ -20,7 +21,7 @@ export default function Home() {
     const [columns, setColumns] = useState<ColumnConfig[]>([]);
     const [isProcessing, setIsProcessing] = useState(false);
     const [progress, setProgress] = useState(0);
-    const [isSLVMode, setIsSLVMode] = useState(false);
+    const [isSLVMode, setIsSLVMode] = useState(true);
     const router = useRouter();
 
     const slvTableHeaders = ['Номер заказа', 'Время заказа', 'Стоимость', 'Организация', 'Адрес',
@@ -88,6 +89,29 @@ export default function Home() {
         }, {} as Record<string, string>);
 
         let rows = [...data.rows];
+        const timeColumnKey = Object.keys(columnMapping).find(key =>
+            columnMapping[key].toLowerCase().includes('время заказа')
+        );
+
+        if (timeColumnKey) {
+            rows.sort((a, b) => {
+                const getDateValue = (value: unknown): Date => {
+                    if (value instanceof Date) return value;
+                    if (typeof value === 'string') {
+                        const parsedDate = new Date(value);
+                        return isNaN(parsedDate.getTime()) ? new Date(0) : parsedDate;
+                    }
+                    return new Date(0);
+                };
+
+                const dateA = getDateValue(a[timeColumnKey]);
+                const dateB = getDateValue(b[timeColumnKey]);
+
+                return dateA.getTime() - dateB.getTime();
+            });
+        }
+
+
         if (isSLVMode && partnerData) {
             const partnerMapping = partnerData.rows.reduce((acc, row) => {
                 const orderNumber = row['Номер заказа'];
@@ -122,7 +146,11 @@ export default function Home() {
                     }
                 }
                 return processedRow;
-            })
+            }),
+            initialSort: timeColumnKey ? {
+                key: columnMapping[timeColumnKey],
+                direction: 'asc' as const
+            } : null
         };
 
         sessionStorage.setItem('processedData', JSON.stringify(processedData));
@@ -176,6 +204,9 @@ export default function Home() {
                             id="slv-mode"
                             pressed={isSLVMode}
                             onPressedChange={setIsSLVMode}
+                            withIcon={true}
+                            iconOn={<Check className="w-4 h-4 text-blue-500" />}
+                            iconOff={<X className="w-4 h-4 text-gray-500" />}
                         />
                         <Label htmlFor="slv-mode">Режим СЛВ</Label>
                     </div>

@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "clsx": "^2.1.1",
+    "date-fns": "^4.1.0",
     "exceljs": "^4.4.0",
     "framer-motion": "^12.14.0",
     "geist": "^1.4.2",
@@ -25,6 +26,7 @@
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
+    "@tailwindcss/postcss": "^4.1.8",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
@@ -33,7 +35,6 @@
     "eslint-config-next": "15.3.2",
     "postcss": "^8.5.4",
     "tailwindcss": "^4.1.8",
-    "@tailwindcss/postcss": "^4.1.8",
     "typescript": "^5"
   }
 }

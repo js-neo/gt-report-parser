@@ -23,7 +23,7 @@ export const formatDateTime = (date: Date | string): string => {
     if (isNaN(d.getTime())) return String(date);
 
     const correctedDate = new Date(d);
-    correctedDate.setHours(correctedDate.getHours() - 3);
+    correctedDate.setHours(correctedDate.getHours());
 
     const day = String(correctedDate.getDate()).padStart(2, '0');
     const month = String(correctedDate.getMonth() + 1).padStart(2, '0');
@@ -32,4 +32,32 @@ export const formatDateTime = (date: Date | string): string => {
     const minutes = String(correctedDate.getMinutes()).padStart(2, '0');
 
     return `${day}.${month}.${year} ${hours}:${minutes}`;
+};
+
+import { parse } from 'date-fns';
+
+export const parseDateTime = (value: unknown): Date => {
+    if (value instanceof Date) return value;
+
+    const strValue = String(value || '');
+    try {
+        const formats = [
+            'dd.MM.yyyy HH:mm',
+            'yyyy-MM-dd HH:mm:ss',
+            'yyyy-MM-dd\'T\'HH:mm:ss',
+            'MM/dd/yyyy HH:mm'
+        ];
+
+        for (const format of formats) {
+            const parsed = parse(strValue, format, new Date());
+            if (!isNaN(parsed.getTime())) {
+                parsed.setHours(parsed.getHours());
+                return parsed;
+            }
+        }
+    } catch (e) {
+        console.warn('Ошибка обработки даты:', e);
+    }
+
+    return new Date(0);
 };
