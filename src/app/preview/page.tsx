@@ -38,7 +38,7 @@ export default function PreviewPage() {
         const numericColumns = ['стоимость', 'доплата'];
         const headerLower = header.trim().toLowerCase();
         return numericColumns.some(column => headerLower.includes(column));
-    }
+    };
 
     useEffect(() => {
         const savedData = sessionStorage.getItem('processedData');
@@ -50,6 +50,42 @@ export default function PreviewPage() {
             router.push('/');
         }
     }, [router]);
+
+    const dateRange = useMemo(() => {
+        if (!tableData) return null;
+
+        let minDate: Date | null = null;
+        let maxDate: Date | null = null;
+
+        tableData.headers.forEach((header) => {
+            if (isTimeColumn(header)) {
+                tableData.rows.forEach(row => {
+                    const value = row[header];
+                    if (!value) return;
+
+                    const date = parseDateTime(value);
+                    if (isNaN(date.getTime())) return;
+
+                    if (!minDate || date < minDate) minDate = date;
+                    if (!maxDate || date > maxDate) maxDate = date;
+                });
+            }
+        });
+
+        return minDate && maxDate ? { minDate, maxDate } : null;
+    }, [tableData]);
+
+    const getReportFileName = () => {
+        if (!dateRange) return 'processed-report';
+
+        const formatDate = (date: Date) => {
+            const day = String(date.getDate()).padStart(2, '0');
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            return `${day}.${month}.${date.getFullYear()}`;
+        };
+
+        return `отчёт_за_период_${formatDate(dateRange.minDate)}_${formatDate(dateRange.maxDate)}`;
+    };
 
     const sortedRows = useMemo(() => {
         if (!tableData?.rows || !sortConfig) return tableData?.rows || [];
@@ -93,24 +129,22 @@ export default function PreviewPage() {
         router.push('/');
     };
 
-
     const SortIcon = ({column}: { column: string }) => {
         if (sortConfig?.key !== column) {
             return (
                 <span className="inline-flex items-center ml-1 text-[2em] opacity-50">
                     <ChevronsUpDown className="w-[1em] h-[1em]"/>
                 </span>
-            )
+            );
         }
         return (
-            <span className="inline-flex items-center ml-1 text-[2em] opacity-50">
+            <span className="inline-flex items-center ml-1 text-[2em]">
                 {sortConfig.direction === 'asc' ?
                     <ArrowUp className="w-[1em] h-[1em]"/>
                     : <ArrowDown className="w-[1em] h-[1em]"/>}
             </span>
         );
-
-    }
+    };
 
     if (!tableData) {
         return (
@@ -133,7 +167,7 @@ export default function PreviewPage() {
                         Вернуться к редактированию
                     </Button>
                     <Button
-                        onClick={() => exportToExcel(tableData, 'processed-report')}
+                        onClick={() => exportToExcel(tableData, getReportFileName())}
                         className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white"
                     >
                         <span className="flex"><FileUp className="w-4 mr-1"/>Экспорт в Excel</span>
@@ -142,8 +176,7 @@ export default function PreviewPage() {
             </div>
 
             <div className="overflow-x-auto shadow-md rounded-lg">
-                <table
-                    className="min-w-full bg-background border border-border border-collapse border-gray-300 dark:border-gray-600">
+                <table className="min-w-full bg-background border border-border border-collapse border-gray-300 dark:border-gray-600">
                     <thead className="bg-gray-100 dark:bg-gray-700">
                     <tr>
                         {tableData.headers.map((header, index) => (
@@ -151,9 +184,9 @@ export default function PreviewPage() {
                                 key={index}
                                 onClick={() => handleSort(header)}
                                 className={cn(
-                                    "px-1 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase ",
+                                    "px-1 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase",
                                     "tracking-wider border border-border border-gray-300 dark:border-gray-600",
-                                    "cursor-pointer hover:bg-grey-200 dark:hover:bg-grey-600 transition-colors",
+                                    "cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors",
                                     isWideColumn(header)
                                         ? "max-w-[400px] min-w-[400]"
                                         : "max-w-[150px] min-w-[80]"
@@ -178,7 +211,7 @@ export default function PreviewPage() {
                                     key={colIndex}
                                     className={cn(
                                         "px-1 py-2 text-sm text-center text-foreground border border-border",
-                                        " border-gray-300 dark:border-gray-600",
+                                        "border-gray-300 dark:border-gray-600",
                                         isWideColumn(header)
                                             ? "max-w-[400px] min-w-[400] break-words whitespace-normal"
                                             : "max-w-[150px] min-w-[80] break-words whitespace-normal"
