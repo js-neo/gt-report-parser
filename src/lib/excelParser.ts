@@ -106,8 +106,21 @@ export const parseCSVFile = async (file: File): Promise<ExcelData> => {
 
         reader.onload = () => {
             try {
-                const csvData = reader.result as string;
-                console.log("csvData: ", csvData);
+                const buffer = reader.result as ArrayBuffer;
+                const decoderWin1251 = new TextDecoder('windows-1251');
+                let csvData = decoderWin1251.decode(buffer);
+
+                console.log("Raw Windows-1251 data:", csvData);
+
+                const isRussianTextPresent = /[а-яА-Я]/.test(csvData);
+
+                if (!isRussianTextPresent) {
+                    console.warn("Русские символы не обнаружены, пробуем UTF-8");
+                    const decoderUtf8 = new TextDecoder('utf-8');
+                    csvData = decoderUtf8.decode(buffer);
+                }
+
+                console.log("Processed CSV data:", csvData);
 
                 if (!csvData.trim()) {
                     throw new Error('Файл CSV пуст');
@@ -116,22 +129,17 @@ export const parseCSVFile = async (file: File): Promise<ExcelData> => {
                 Papa.parse(csvData, {
                     header: true,
                     skipEmptyLines: true,
+                    delimiter: ';',
                     complete: (results: Papa.ParseResult<Record<string, unknown>>) => {
                         if (results.errors.length > 0) {
-                            console.error('Ошибки парсинга CSV:', {
-                                errors: results.errors,
-                                sampleData: results.data.slice(0, 3)
-                            });
+                            console.error('CSV parsing errors:', results.errors);
                             reject(new Error(`Ошибка парсинга CSV: ${results.errors[0].message}`));
                             return;
                         }
 
-                        if (results.data.length === 0) {
-                            reject(new Error('CSV файл не содержит данных'));
-                            return;
-                        }
-
                         const headers = results.meta.fields || [];
+                        console.log("CSV headers:", headers);
+
                         const isTimeColumn = headers.map(header =>
                             header.toLowerCase().includes('время')
                         );
@@ -163,7 +171,7 @@ export const parseCSVFile = async (file: File): Promise<ExcelData> => {
                     }
                 });
             } catch (error) {
-                reject(new Error(`Ошибка чтения файла: ${error instanceof Error ? error.message : String(error)}`));
+                reject(new Error(`Ошибка обработки файла: ${error instanceof Error ? error.message : String(error)}`));
             }
         };
 
@@ -171,7 +179,7 @@ export const parseCSVFile = async (file: File): Promise<ExcelData> => {
             reject(new Error('Ошибка чтения файла'));
         };
 
-        reader.readAsText(file, 'UTF-8');
+        reader.readAsArrayBuffer(file);
     });
 };
 
