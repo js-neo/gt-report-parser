@@ -11,18 +11,19 @@ const adjustForMoscowTime = (date: Date): Date => {
 const widthColumns = [
     {key: 'Номер заказа', width: 130},
     {key: 'Время заказа', width: 230},
-    {key: 'Стоимость', width: 150},
+    {key: 'Стоимость', width: 160},
+    {key: 'Сумма клиента', width: 150},
     {key: 'Заказчик', width: 270},
     {key: 'Адрес', width: 680},
     {key: 'Исполнитель', width: 270},
     {key: 'Автомобиль', width: 270},
     {key: 'Комментарий', width: 680},
     {key: 'Клиент', width: 270},
-    {key: 'Подключал', width: 270},
+    {key: 'Парк партнёр', width: 270},
     {key: 'Доплата', width: 270},
 ];
 
-const numericColumns = ['Стоимость', 'Доплата'];
+const numericColumns = ['Стоимость', 'Сумма клиента', 'Доплата'];
 
 const isNumericColumn = (header: string) => {
     return numericColumns.some(numericHeader =>

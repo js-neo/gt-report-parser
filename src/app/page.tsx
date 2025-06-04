@@ -3,17 +3,17 @@
 "use client"
 
 import {useState, useCallback, useEffect} from 'react';
-import { useRouter } from 'next/navigation';
-import { Check, X } from 'lucide-react';
+import {useRouter} from 'next/navigation';
+import {Check, X} from 'lucide-react';
 import {FileUpload} from '@/components/FileUpload';
 import {ColumnEditor} from '@/components/ColumnEditor';
-import { Button } from '@/components/UI/Button';
-import type { ExcelData, ColumnConfig } from '@/lib/types';
+import {Button} from '@/components/UI/Button';
+import type {ExcelData, ColumnConfig} from '@/lib/types';
 import {ProgressBar} from "@/components/UI/ProgressBar";
 import {formatDateTime} from "@/utils";
 import {processExcelData} from "@/lib/excelParser";
-import { Toggle } from '@/components/UI/Toggle';
-import { Label } from '@/components/UI/Label';
+import {Toggle} from '@/components/UI/Toggle';
+import {Label} from '@/components/UI/Label';
 
 export default function Home() {
     const [excelData, setExcelData] = useState<ExcelData | null>(null);
@@ -24,8 +24,8 @@ export default function Home() {
     const [isSLVMode, setIsSLVMode] = useState(true);
     const router = useRouter();
 
-    const slvTableHeaders = ['Номер заказа', 'Время заказа', 'Стоимость', 'Организация', 'Адрес',
-        'Исполнитель', 'Автомобиль', 'Комментарий', 'Клиент', 'Подключал', 'Доплата'];
+    const slvTableHeaders = ['Номер заказа', 'Время заказа', 'Стоимость', 'Сумма клиента',
+        'Организация', 'Адрес', 'Исполнитель', 'Автомобиль', 'Комментарий', 'Клиент', 'Парк партнёр', 'Доплата'];
 
     useEffect(() => {
         const savedPreviewData = sessionStorage.getItem('savedPreviewData');
@@ -111,6 +111,66 @@ export default function Home() {
             });
         }
 
+        const commentColumnKey = Object.keys(columnMapping).find(key =>
+            columnMapping[key].toLowerCase().includes('комментарий'));
+
+        const executorColumnKey = Object.keys(columnMapping).find(key =>
+            columnMapping[key].toLowerCase().includes('исполнитель'));
+
+        rows = rows.map(row => {
+            if (!commentColumnKey || !executorColumnKey) return row;
+            const comment = String(row[commentColumnKey] || '').toLowerCase();
+            const executor = String(row[executorColumnKey] || '').trim();
+
+            if (executor) return row;
+            if (comment.includes('сапсан')) {
+                return {
+                    ...row,
+                    [executorColumnKey]: 'Сапсан'
+                }
+            }
+
+            const yandexPatterns = [
+                /як$/,
+                /\/як$/,
+                /\/яким$/,
+                /\/яким/i,
+                /\/яков$/,
+                /яков$/,
+                /\/як\s*$/i,
+
+            ];
+            const isYandex = yandexPatterns.some((pattern) =>
+            pattern.test(String(row[commentColumnKey] || '').toLowerCase()));
+
+            if (isYandex) {
+                return {
+                    ...row,
+                    [executorColumnKey]: 'Яндекс'
+                }
+            }
+
+            const viliPatterns = [
+                /влад\d{3}$/i,
+                /\/в$/i,
+                /в$/i,
+                /\/в\s*$/i
+            ];
+
+            const isVili = viliPatterns.some((pattern) =>
+            pattern.test(String(row[commentColumnKey] || '').toLowerCase()));
+
+            if (isVili) {
+                return {
+                    ...row,
+                    [executorColumnKey]: 'Вили'
+                }
+            }
+
+            return row;
+
+        })
+
 
         if (isSLVMode && partnerData) {
             const partnerMapping = partnerData.rows.reduce((acc, row) => {
@@ -128,7 +188,7 @@ export default function Home() {
 
                 return {
                     ...row,
-                    'Подключал': partner || '',
+                    'Парк партнёр': partner || '',
                     'Доплата': row['Доплата'] || ''
                 };
             });
@@ -205,12 +265,12 @@ export default function Home() {
                             pressed={isSLVMode}
                             onPressedChange={setIsSLVMode}
                             withIcon={true}
-                            iconOn={<Check className="w-4 h-4 text-blue-500" />}
-                            iconOff={<X className="w-4 h-4 text-gray-500" />}
+                            iconOn={<Check className="w-4 h-4 text-blue-500"/>}
+                            iconOff={<X className="w-4 h-4 text-gray-500"/>}
                         />
                         <Label htmlFor="slv-mode">Режим СЛВ</Label>
                     </div>
-                    <FileUpload onUploadAction={handleFileUpload} />
+                    <FileUpload onUploadAction={handleFileUpload}/>
                 </div>
             ) : (
                 <div className="space-y-6">
@@ -250,7 +310,7 @@ export default function Home() {
 
                     {isProcessing && (
                         <div className="mt-4">
-                            <ProgressBar value={progress} />
+                            <ProgressBar value={progress}/>
                             <p className="text-sm text-muted-foreground mt-2">
                                 Прогресс: {progress}%
                             </p>
