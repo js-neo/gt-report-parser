@@ -6,7 +6,7 @@ import { useDropzone } from 'react-dropzone';
 import { Button } from '@/components/UI/Button';
 import { FileUp } from 'lucide-react';
 import type { ExcelData } from '@/lib/types';
-import { parseExcelFile } from '@/lib/excelParser';
+import { parseExcelFile, parseCSVFile } from '@/lib/excelParser';
 import { cn } from "@/utils";
 
 interface FileUploadProps {
@@ -20,11 +20,18 @@ export const FileUpload = ({ onUploadAction, acceptOnly }: FileUploadProps) => {
         if (!file) return;
 
         try {
-            const data = await parseExcelFile(file);
+            let data: ExcelData;
+
+            if (file.name.endsWith('.csv')) {
+                data = await parseCSVFile(file);
+            } else {
+                data = await parseExcelFile(file);
+            }
 
             if (acceptOnly) {
                 const missingHeaders = acceptOnly.filter(header =>
-                    !data.headers.some(h => h.toLowerCase().includes(header.toLowerCase()))
+                    !data.headers.some(h =>
+                        h.toLowerCase().includes(header.toLowerCase()))
                 );
 
                 if (missingHeaders.length > 0) {
@@ -44,7 +51,8 @@ export const FileUpload = ({ onUploadAction, acceptOnly }: FileUploadProps) => {
         onDrop,
         accept: {
             'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'],
-            'application/vnd.ms-excel': ['.xls']
+            'application/vnd.ms-excel': ['.xls'],
+            'text/csv': ['.csv']
         }
     });
 
@@ -68,7 +76,7 @@ export const FileUpload = ({ onUploadAction, acceptOnly }: FileUploadProps) => {
                     </p>
                 </div>
                 <p className="text-sm text-muted-foreground">
-                    Поддерживаются файлы .xlsx и .xls
+                    Поддерживаются файлы .xlsx, .xls и .csv
                 </p>
             </div>
         </div>

@@ -80,6 +80,12 @@ export default function Home() {
         setPartnerData(data);
     }, []);
 
+    const removePhoneNumber = (text: string): string => {
+        const phoneRegex = /(\+7|7|8)?[\s\-]?\(?\d{3}\)?[\s\-]?\d{3}[\s\-]?\d{2}[\s\-]?\d{2}\b/g;
+
+        return text.replace(phoneRegex, '').replace(/\s+/g, ' ').trim();
+    }
+
     const processAndSaveData = (columns: ColumnConfig[], data: ExcelData) => {
         const columnMapping = columns.reduce((acc, column) => {
             if (column.visible) {
@@ -118,6 +124,10 @@ export default function Home() {
             columnMapping[key].toLowerCase().includes('исполнитель'));
 
         rows = rows.map(row => {
+            if (commentColumnKey && row[commentColumnKey]) {
+                row[commentColumnKey] = removePhoneNumber(String(row[commentColumnKey]));
+            }
+
             if (!commentColumnKey || !executorColumnKey) return row;
             const comment = String(row[commentColumnKey] || '').toLowerCase();
             const executor = String(row[executorColumnKey] || '').trim();
@@ -170,7 +180,6 @@ export default function Home() {
             return row;
 
         })
-
 
         if (isSLVMode && partnerData) {
             const partnerMapping = partnerData.rows.reduce((acc, row) => {

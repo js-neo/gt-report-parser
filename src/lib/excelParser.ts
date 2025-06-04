@@ -1,6 +1,7 @@
 // src/lib/excelParser.ts
 
 import ExcelJS from 'exceljs';
+import Papa from 'papaparse';
 import type { ExcelData, ColumnConfig, ProcessedData } from './types';
 
 const adjustForMoscowTime = (date: Date): Date => {
@@ -96,6 +97,81 @@ const applyWorksheetFormatting = (worksheet: ExcelJS.Worksheet, headers: string[
                 right: { style: 'thin' }
             };
         });
+    });
+};
+
+export const parseCSVFile = async (file: File): Promise<ExcelData> => {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+
+        reader.onload = () => {
+            try {
+                const csvData = reader.result as string;
+                console.log("csvData: ", csvData);
+
+                if (!csvData.trim()) {
+                    throw new Error('Файл CSV пуст');
+                }
+
+                Papa.parse(csvData, {
+                    header: true,
+                    skipEmptyLines: true,
+                    complete: (results: Papa.ParseResult<Record<string, unknown>>) => {
+                        if (results.errors.length > 0) {
+                            console.error('Ошибки парсинга CSV:', {
+                                errors: results.errors,
+                                sampleData: results.data.slice(0, 3)
+                            });
+                            reject(new Error(`Ошибка парсинга CSV: ${results.errors[0].message}`));
+                            return;
+                        }
+
+                        if (results.data.length === 0) {
+                            reject(new Error('CSV файл не содержит данных'));
+                            return;
+                        }
+
+                        const headers = results.meta.fields || [];
+                        const isTimeColumn = headers.map(header =>
+                            header.toLowerCase().includes('время')
+                        );
+
+                        const rows = results.data.map((row: Record<string, unknown>) => {
+                            const processedRow: Record<string, unknown> = {};
+                            headers.forEach((header, index) => {
+                                try {
+                                    if (isTimeColumn[index] && row[header]) {
+                                        const dateValue = new Date(String(row[header]));
+                                        processedRow[header] = !isNaN(dateValue.getTime())
+                                            ? adjustForMoscowTime(dateValue)
+                                            : row[header];
+                                    } else {
+                                        processedRow[header] = row[header];
+                                    }
+                                } catch (error) {
+                                    console.warn(`Ошибка обработки поля ${header}:`, error);
+                                    processedRow[header] = row[header];
+                                }
+                            });
+                            return processedRow;
+                        });
+
+                        resolve({ headers, rows });
+                    },
+                    error: (error: Error) => {
+                        reject(new Error(`Ошибка парсинга CSV: ${error.message}`));
+                    }
+                });
+            } catch (error) {
+                reject(new Error(`Ошибка чтения файла: ${error instanceof Error ? error.message : String(error)}`));
+            }
+        };
+
+        reader.onerror = () => {
+            reject(new Error('Ошибка чтения файла'));
+        };
+
+        reader.readAsText(file, 'UTF-8');
     });
 };
 
