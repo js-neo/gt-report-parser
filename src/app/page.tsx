@@ -123,7 +123,14 @@ export default function Home() {
         const executorColumnKey = Object.keys(columnMapping).find(key =>
             columnMapping[key].toLowerCase().includes('исполнитель'));
 
+        const clientColumnKey = Object.keys(columnMapping).find(key =>
+            columnMapping[key].toLowerCase().trim() === 'клиент');
+
         rows = rows.map(row => {
+            if (clientColumnKey) {
+                row[clientColumnKey] = '';
+            }
+
             if (commentColumnKey && row[commentColumnKey]) {
                 row[commentColumnKey] = removePhoneNumber(String(row[commentColumnKey]));
             }
@@ -139,21 +146,50 @@ export default function Home() {
                     [executorColumnKey]: 'Сапсан'
                 }
             }
+            if (comment.includes('асонов')) {
+                return {
+                    ...row,
+                    [executorColumnKey]: 'Асонов'
+                }
+            }
 
             const yandexPatterns = [
-                /як$/,
-                /\/як$/,
-                /\/яким$/,
-                /\/яким/i,
-                /\/яков$/,
-                /яков$/,
-                /\/як\s*$/i,
-
+                /я$/i,
+                /як$/i,
+                /яким$/i,
+                /яков$/i,
+                /\dя$/i,
+                /\dяк$/i,
+                /\dяким$/i,
+                /\dяков$/i,
+                /я\d{3}$/i,
+                /\dя\d{3}$/i,
+                /\/я$/i,
+                /\/як$/i,
+                /\/яким$/i,
+                /\/яков$/i,
+                /\sя$/i,
+                /\sяк$/i,
+                /\sяким$/i,
+                /\sяков$/i,
+                /я[^а-яё]*$/i,
+                /як[^а-яё]*$/i,
+                /яким[^а-яё]*$/i
             ];
-            const isYandex = yandexPatterns.some((pattern) =>
-            pattern.test(String(row[commentColumnKey] || '').toLowerCase()));
 
-            if (isYandex) {
+            const isYandex = (comment: unknown) => {
+                const commentText = String(comment || '').toLowerCase();
+                const exceptionRegs = [/ния$/i, /парадная\s*\d*$/i];
+                const isException = exceptionRegs.some(reg => reg.test(commentText));
+                if (isException) return false;
+                return yandexPatterns.some(pattern => {
+                    const matched = pattern.test(commentText);
+                    if (matched) console.log(`Matched pattern: ${pattern} for text: ${commentText}`);
+                    return matched;
+                });
+            };
+
+            if (isYandex(row[commentColumnKey])) {
                 return {
                     ...row,
                     [executorColumnKey]: 'Яндекс'
@@ -164,13 +200,25 @@ export default function Home() {
                 /влад\d{3}$/i,
                 /\/в$/i,
                 /в$/i,
-                /\/в\s*$/i
+                /\/в\s*$/i,
+                /\dв\d{3}$/i,
+                /\d\/в/i,
+                /\dв$/i,
             ];
 
-            const isVili = viliPatterns.some((pattern) =>
-            pattern.test(String(row[commentColumnKey] || '').toLowerCase()));
+            const isVili = (comment: unknown) => {
+                const commentText = String(comment || '').toLowerCase();
+                const exceptionRegs = [/ов$/i];
+                const isException = exceptionRegs.some(reg => reg.test(commentText));
+                if (isException) return false;
+                return viliPatterns.some(pattern => {
+                    const matched = pattern.test(commentText);
+                    if (matched) console.log(`Matched pattern: ${pattern} for text: ${commentText}`);
+                    return matched;
+                });
+            };
 
-            if (isVili) {
+            if (isVili(row[commentColumnKey])) {
                 return {
                     ...row,
                     [executorColumnKey]: 'Вили'

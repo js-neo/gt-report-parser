@@ -155,7 +155,7 @@ export default function PreviewPage() {
     }
 
     return (
-        <div className="container mx-auto px-4 py-8">
+        <div className="container mx-auto px-4 py-8 flex flex-col h-[calc(100vh-1rem)]">
             <div className="flex justify-between items-center mb-6">
                 <h1 className="text-3xl font-bold">Предпросмотр таблицы</h1>
                 <div className="flex gap-2">
@@ -175,57 +175,59 @@ export default function PreviewPage() {
                 </div>
             </div>
 
-            <div className="overflow-x-auto shadow-md rounded-lg">
-                <table className="min-w-full bg-background border border-border border-collapse border-gray-300 dark:border-gray-600">
-                    <thead className="bg-gray-100 dark:bg-gray-700">
-                    <tr>
-                        {tableData.headers.map((header, index) => (
-                            <th
-                                key={index}
-                                onClick={() => handleSort(header)}
-                                className={cn(
-                                    "px-1 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase",
-                                    "tracking-wider border border-border border-gray-300 dark:border-gray-600",
-                                    "cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors",
-                                    isWideColumn(header)
-                                        ? "max-w-[400px] min-w-[400]"
-                                        : "max-w-[150px] min-w-[80]"
-                                )}
-                            >
-                                <div className="flex items-center justify-center gap-1">
-                                    {header}
-                                    <SortIcon column={header}/>
-                                </div>
-                            </th>
-                        ))}
-                    </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border">
-                    {sortedRows.map((row, rowIndex) => (
-                        <tr
-                            key={rowIndex}
-                            className={rowIndex % 2 === 0 ? 'bg-background' : 'bg-gray-50 dark:bg-gray-700'}
-                        >
-                            {tableData.headers.map((header, colIndex) => (
-                                <td
-                                    key={colIndex}
+            <div className="flex-1 overflow-hidden">
+                <div className="h-full overflow-auto">
+                    <table className="min-w-full bg-background border border-border border-collapse border-gray-300 dark:border-gray-600">
+                        <thead className="bg-gray-100 dark:bg-gray-700 sticky top-0 z-10">
+                        <tr>
+                            {tableData.headers.map((header, index) => (
+                                <th
+                                    key={index}
+                                    onClick={() => handleSort(header)}
                                     className={cn(
-                                        "px-1 py-2 text-sm text-center text-foreground border border-border",
-                                        "border-gray-300 dark:border-gray-600",
+                                        "px-1 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase",
+                                        "tracking-wider border border-border border-gray-300 dark:border-gray-600",
+                                        "cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors",
                                         isWideColumn(header)
-                                            ? "max-w-[400px] min-w-[400] break-words whitespace-normal"
-                                            : "max-w-[150px] min-w-[80] break-words whitespace-normal"
+                                            ? "max-w-[400px] min-w-[400px]"
+                                            : "max-w-[150px] min-w-[80px]"
                                     )}
                                 >
-                                    {isTimeColumn(header) && typeof row[header] === 'string' && row[header].toString().includes('T')
-                                        ? formatDateTime(new Date(row[header] as string))
-                                        : String(row[header] || '')}
-                                </td>
+                                    <div className="flex items-center justify-center gap-1">
+                                        {header}
+                                        <SortIcon column={header}/>
+                                    </div>
+                                </th>
                             ))}
                         </tr>
-                    ))}
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody className="divide-y divide-border">
+                        {sortedRows.map((row, rowIndex) => (
+                            <tr
+                                key={rowIndex}
+                                className={rowIndex % 2 === 0 ? 'bg-background' : 'bg-gray-50 dark:bg-gray-700'}
+                            >
+                                {tableData.headers.map((header, colIndex) => (
+                                    <td
+                                        key={colIndex}
+                                        className={cn(
+                                            "px-1 py-2 text-sm text-center text-foreground border border-border",
+                                            "border-gray-300 dark:border-gray-600",
+                                            isWideColumn(header)
+                                                ? "max-w-[400px] min-w-[400px] break-words whitespace-normal"
+                                                : "max-w-[150px] min-w-[80px] break-words whitespace-normal"
+                                        )}
+                                    >
+                                        {isTimeColumn(header) && typeof row[header] === 'string' && row[header].toString().includes('T')
+                                            ? formatDateTime(new Date(row[header] as string))
+                                            : String(row[header] || '')}
+                                    </td>
+                                ))}
+                            </tr>
+                        ))}
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     );

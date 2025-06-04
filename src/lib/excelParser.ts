@@ -110,8 +110,6 @@ export const parseCSVFile = async (file: File): Promise<ExcelData> => {
                 const decoderWin1251 = new TextDecoder('windows-1251');
                 let csvData = decoderWin1251.decode(buffer);
 
-                console.log("Raw Windows-1251 data:", csvData);
-
                 const isRussianTextPresent = /[а-яА-Я]/.test(csvData);
 
                 if (!isRussianTextPresent) {
@@ -119,8 +117,6 @@ export const parseCSVFile = async (file: File): Promise<ExcelData> => {
                     const decoderUtf8 = new TextDecoder('utf-8');
                     csvData = decoderUtf8.decode(buffer);
                 }
-
-                console.log("Processed CSV data:", csvData);
 
                 if (!csvData.trim()) {
                     throw new Error('Файл CSV пуст');
@@ -138,8 +134,6 @@ export const parseCSVFile = async (file: File): Promise<ExcelData> => {
                         }
 
                         const headers = results.meta.fields || [];
-                        console.log("CSV headers:", headers);
-
                         const isTimeColumn = headers.map(header =>
                             header.toLowerCase().includes('время')
                         );
