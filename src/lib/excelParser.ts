@@ -3,6 +3,7 @@
 import ExcelJS from 'exceljs';
 import Papa from 'papaparse';
 import type { ExcelData, ColumnConfig, ProcessedData } from './types';
+import {parseDateTime} from "@/utils";
 
 const adjustForMoscowTime = (date: Date): Date => {
     const moscowOffset = 3 * 60 * 60 * 1000;
@@ -143,10 +144,8 @@ export const parseCSVFile = async (file: File): Promise<ExcelData> => {
                             headers.forEach((header, index) => {
                                 try {
                                     if (isTimeColumn[index] && row[header]) {
-                                        const dateValue = new Date(String(row[header]));
-                                        processedRow[header] = !isNaN(dateValue.getTime())
-                                            ? adjustForMoscowTime(dateValue)
-                                            : row[header];
+                                        const dateValue = parseDateTime(String(row[header]));
+                                        processedRow[header] = !isNaN(dateValue.getTime()) && row[header];
                                     } else {
                                         processedRow[header] = row[header];
                                     }

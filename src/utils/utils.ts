@@ -2,6 +2,7 @@
 
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import { parse } from 'date-fns';
 
 /**
  * Объединяет классы с поддержкой:
@@ -33,8 +34,6 @@ export const formatDateTime = (date: Date | string): string => {
 
     return `${day}.${month}.${year} ${hours}:${minutes}`;
 };
-
-import { parse } from 'date-fns';
 
 export const parseDateTime = (value: unknown): Date => {
     if (value instanceof Date) return value;
