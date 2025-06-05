@@ -173,6 +173,8 @@ export default function Home() {
                 /\/як$/i,
                 /\/яким$/i,
                 /\/яков$/i,
+                /\/яков/i,
+                /\/яким/i,
                 /\sя$/i,
                 /\sяк$/i,
                 /\sяким$/i,
@@ -212,13 +214,16 @@ export default function Home() {
             ];
 
             const isVili = (comment: unknown) => {
-                const commentText = String(comment || '').toLowerCase();
-                const exceptionRegs = [/ов$/i];
+                const commentText = String(comment || '');
+                const exceptionRegs = [/ов$/];
                 const isException = exceptionRegs.some(reg => reg.test(commentText));
-                if (isException) return false;
+                if (isException) {
+                    console.log('Не добавлено по исключению:', commentText);
+                    return false;
+                }
                 return viliPatterns.some(pattern => {
                     const matched = pattern.test(commentText);
-                    if (matched) console.log(`Matched pattern: ${pattern} for text: ${commentText}`);
+                    if (matched) console.log(`Matched Vili pattern: ${pattern} for text: ${commentText}`);
                     return matched;
                 });
             };
