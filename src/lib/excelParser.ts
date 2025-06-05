@@ -139,22 +139,19 @@ export const parseCSVFile = async (file: File): Promise<ExcelData> => {
                             header.toLowerCase().includes('время')
                         );
 
-                        console.log("isTimeColumn: ", isTimeColumn);
+
 
                         const rows = results.data.map((row: Record<string, unknown>) => {
                             const processedRow: Record<string, unknown> = {};
                             headers.forEach((header, index) => {
                                 try {
-                                    console.log("index: ", index);
+
                                     if (isTimeColumn[index] && row[header]) {
-                                        console.log(`isTimeColumn[${index}] && row[${header}]: `, isTimeColumn[index] && row[header])
-                                        console.log("row[header]: ", row[header]);
+
                                         const dateValue = parseDateTime(String(row[header]));
-                                        console.log("dateValue: ", dateValue);
-                                        console.log("dateValue.getTime(): ", dateValue.getTime());
-                                        console.log("dateValue.getTime(): ", dateValue.getTime());
+
                                         processedRow[header] = !isNaN(dateValue.getTime()) && row[header];
-                                        console.log("processedRow[header]: ", processedRow[header]);
+
                                     } else {
                                         processedRow[header] = row[header];
                                     }

@@ -87,7 +87,7 @@ export default function Home() {
     }
 
     const processAndSaveData = (columns: ColumnConfig[], data: ExcelData) => {
-        console.log("data: ", data);
+
         const columnMapping = columns.reduce((acc, column) => {
             if (column.visible) {
                 acc[column.id] = column.name;
@@ -124,6 +124,9 @@ export default function Home() {
         const executorColumnKey = Object.keys(columnMapping).find(key =>
             columnMapping[key].toLowerCase().includes('исполнитель'));
 
+        const customerColumnKey = Object.keys(columnMapping).find(key =>
+            columnMapping[key].toLowerCase().includes('заказчик'));
+
         const clientColumnKey = Object.keys(columnMapping).find(key =>
             columnMapping[key].toLowerCase().trim() === 'клиент');
 
@@ -136,15 +139,16 @@ export default function Home() {
                 row[commentColumnKey] = removePhoneNumber(String(row[commentColumnKey]));
             }
 
-            if (!commentColumnKey || !executorColumnKey) return row;
+            if (!commentColumnKey || !executorColumnKey || !customerColumnKey) return row;
             const comment = String(row[commentColumnKey] || '').toLowerCase();
             const executor = String(row[executorColumnKey] || '').trim();
 
             if (executor) return row;
+
             if (comment.includes('сапсан')) {
                 return {
                     ...row,
-                    [executorColumnKey]: 'Сапсан'
+                    [customerColumnKey]: 'Сапсан'
                 }
             }
             if (comment.includes('асонов')) {
