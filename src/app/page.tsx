@@ -143,14 +143,15 @@ export default function Home() {
             const comment = String(row[commentColumnKey] || '').toLowerCase();
             const executor = String(row[executorColumnKey] || '').trim();
 
-            if (executor) return row;
-
             if (comment.includes('сапсан')) {
                 return {
                     ...row,
                     [customerColumnKey]: 'Сапсан'
                 }
             }
+
+            if (executor) return row;
+
             if (comment.includes('асонов')) {
                 return {
                     ...row,
