@@ -87,7 +87,7 @@ export default function Home() {
     }
 
     const processAndSaveData = (columns: ColumnConfig[], data: ExcelData) => {
-        console.log("data: ", data);
+
         const columnMapping = columns.reduce((acc, column) => {
             if (column.visible) {
                 acc[column.id] = column.name;
