@@ -81,10 +81,28 @@ export default function Home() {
     }, []);
 
     const removePhoneNumber = (text: string): string => {
-        const phoneRegex = /(\+7|7|8)?[\s\-]?\(?\d{3}\)?[\s\-]?\d{3}[\s\-]?\d{2}[\s\-]?\d{2}\b/g;
+        const countryCodeRegex = /(\+7|7|8)\d{10}|(\+7|7|8)[\s\-]?\(?\d{3}\)?[\s\-]?\d{3}[\s\-]?\d{2}[\s\-]?\d{2}/g;
+        const localPhoneRegex = /9\d{9}|\(?\d{3}\)?[\s\-]?\d{3}[\s\-]?\d{2}[\s\-]?\d{2}/g;
 
-        return text.replace(phoneRegex, '').replace(/\s+/g, ' ').trim();
-    }
+        let result = text;
+        let hasCountryCodeNumbers = false;
+
+        let match;
+        while ((match = countryCodeRegex.exec(text)) !== null) {
+            console.log(`[Номер с кодом] Найдено: "${match[0]}" (позиция ${match.index})`);
+            result = result.replace(match[0], '');
+            hasCountryCodeNumbers = true;
+        }
+
+        if (!hasCountryCodeNumbers) {
+            while ((match = localPhoneRegex.exec(text)) !== null) {
+                console.log(`[Локальный номер] Найдено: "${match[0]}" (позиция ${match.index})`);
+                result = result.replace(match[0], '');
+            }
+        }
+
+        return result.replace(/\s+/g, ' ').trim();
+    };
 
     const processAndSaveData = (columns: ColumnConfig[], data: ExcelData) => {
 
