@@ -1,8 +1,8 @@
 // src/lib/excelParser.ts
 
-import ExcelJS from 'exceljs';
+import ExcelJS, { Row } from 'exceljs';
 import Papa from 'papaparse';
-import type { ExcelData, ColumnConfig, ProcessedData } from './types';
+import type {ExcelData, ColumnConfig, ProcessedData} from './types';
 import {parseDateTime} from "@/utils";
 
 const adjustForMoscowTime = (date: Date): Date => {
@@ -13,6 +13,7 @@ const adjustForMoscowTime = (date: Date): Date => {
 const widthColumns = [
     {key: 'Номер заказа', width: 130},
     {key: 'Время заказа', width: 230},
+    {key: 'Текущий статус', width: 230},
     {key: 'Стоимость', width: 160},
     {key: 'Сумма клиента', width: 150},
     {key: 'Заказчик', width: 270},
@@ -48,7 +49,7 @@ const applyWorksheetFormatting = (worksheet: ExcelJS.Worksheet, headers: string[
         cell.fill = {
             type: 'pattern',
             pattern: 'solid',
-            fgColor: { argb: 'FFE6FFE6' }
+            fgColor: {argb: 'FFE6FFE6'}
         };
         cell.font = {
             bold: true,
@@ -61,17 +62,19 @@ const applyWorksheetFormatting = (worksheet: ExcelJS.Worksheet, headers: string[
             wrapText: true
         };
         cell.border = {
-            top: { style: 'thin' },
-            left: { style: 'thin' },
-            bottom: { style: 'thin' },
-            right: { style: 'thin' }
+            top: {style: 'thin'},
+            left: {style: 'thin'},
+            bottom: {style: 'thin'},
+            right: {style: 'thin'}
         };
     });
 
-    worksheet.eachRow((row, rowNumber) => {
+    worksheet.eachRow((row: Row, rowNumber) => {
         if (rowNumber === 1) return;
         const isEvenRow = rowNumber % 2 === 0;
-        const rowFillColor = isEvenRow ? 'FFF2F2F2' : 'FFFFFFFF';
+        const isSapsan = row._isSapsan === true;
+        const rowFillColor = isSapsan ?
+            'FFE6FFE6' : isEvenRow ? 'FFF2F2F2' : 'FFFFFFFF';
 
         row.eachCell((cell, colNumber) => {
             const header = headers[colNumber - 1];
@@ -84,7 +87,7 @@ const applyWorksheetFormatting = (worksheet: ExcelJS.Worksheet, headers: string[
             cell.fill = {
                 type: 'pattern',
                 pattern: 'solid',
-                fgColor: { argb: rowFillColor }
+                fgColor: {argb: rowFillColor}
             };
             cell.alignment = {
                 vertical: 'middle',
@@ -92,10 +95,10 @@ const applyWorksheetFormatting = (worksheet: ExcelJS.Worksheet, headers: string[
                 wrapText: true
             };
             cell.border = {
-                top: { style: 'thin' },
-                left: { style: 'thin' },
-                bottom: { style: 'thin' },
-                right: { style: 'thin' }
+                top: {style: 'thin'},
+                left: {style: 'thin'},
+                bottom: {style: 'thin'},
+                right: {style: 'thin'}
             };
         });
     });
@@ -140,7 +143,6 @@ export const parseCSVFile = async (file: File): Promise<ExcelData> => {
                         );
 
 
-
                         const rows = results.data.map((row: Record<string, unknown>) => {
                             const processedRow: Record<string, unknown> = {};
                             headers.forEach((header, index) => {
@@ -163,7 +165,7 @@ export const parseCSVFile = async (file: File): Promise<ExcelData> => {
                             return processedRow;
                         });
 
-                        resolve({ headers, rows });
+                        resolve({headers, rows});
                     },
                     error: (error: Error) => {
                         reject(new Error(`Ошибка парсинга CSV: ${error.message}`));
@@ -202,7 +204,7 @@ export const parseExcelFile = async (file: File): Promise<ExcelData> => {
         header.toLowerCase().includes('время')
     );
 
-    worksheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
+    worksheet.eachRow({includeEmpty: false}, (row, rowNumber) => {
         if (rowNumber === 1) return;
 
         const rowData: Record<string, unknown> = {};
@@ -214,16 +216,14 @@ export const parseExcelFile = async (file: File): Promise<ExcelData> => {
                 if (cell.type === ExcelJS.ValueType.Date) {
                     const dateValue = cell.value as Date;
                     rowData[header] = adjustForMoscowTime(dateValue);
-                }
-                else if (typeof cell.value === 'number' && cell.value > 10000) {
+                } else if (typeof cell.value === 'number' && cell.value > 10000) {
                     try {
                         const excelDate = new Date((cell.value - 25569) * 86400 * 1000);
                         rowData[header] = adjustForMoscowTime(excelDate);
                     } catch {
                         rowData[header] = cell.value;
                     }
-                }
-                else if (typeof cell.value === 'string' && cell.value.match(/\d{4}-\d{2}-\d{2}/)) {
+                } else if (typeof cell.value === 'string' && cell.value.match(/\d{4}-\d{2}-\d{2}/)) {
                     try {
                         const dateValue = new Date(cell.value);
                         if (!isNaN(dateValue.getTime())) {
@@ -234,8 +234,7 @@ export const parseExcelFile = async (file: File): Promise<ExcelData> => {
                     } catch {
                         rowData[header] = cell.value;
                     }
-                }
-                else {
+                } else {
                     rowData[header] = cell.value;
                 }
             } else {
@@ -245,7 +244,7 @@ export const parseExcelFile = async (file: File): Promise<ExcelData> => {
         rows.push(rowData);
     });
 
-    return { headers, rows };
+    return {headers, rows};
 };
 
 export const processExcelData = async (
@@ -300,7 +299,10 @@ export const exportToExcel = async (data: ProcessedData, fileName: string) => {
 
             return value;
         });
-        worksheet.addRow(rowData);
+        const addedRow = worksheet.addRow(rowData);
+        if (row._isSapsan) {
+            addedRow._isSapsan = true;
+        }
     });
 
     applyWorksheetFormatting(worksheet, data.headers);

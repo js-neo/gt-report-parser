@@ -8,6 +8,7 @@ import {exportToExcel} from "@/lib/excelParser";
 import {FileUp, ArrowUp, ArrowDown, ChevronsUpDown} from 'lucide-react';
 import {formatDateTime, parseDateTime} from "@/utils";
 import {cn} from "@/utils";
+import {RowWithSapsanFlag} from "@/lib/types";
 
 type SortConfig = {
     key: string;
@@ -18,7 +19,7 @@ export default function PreviewPage() {
     const router = useRouter();
     const [tableData, setTableData] = useState<{
         headers: string[];
-        rows: Record<string, unknown>[];
+        rows: RowWithSapsanFlag[];
         initialSort?: SortConfig;
     } | null>(null);
     const [sortConfig, setSortConfig] = useState<SortConfig | null>(null);
@@ -205,7 +206,8 @@ export default function PreviewPage() {
                         {sortedRows.map((row, rowIndex) => (
                             <tr
                                 key={rowIndex}
-                                className={rowIndex % 2 === 0 ? 'bg-background' : 'bg-gray-50 dark:bg-gray-700'}
+                                className={cn(rowIndex % 2 === 0 ? 'bg-background' : 'bg-gray-50 dark:bg-gray-700',
+                                row._isSapsan && 'bg-green-100 dark:bg-green-900')}
                             >
                                 {tableData.headers.map((header, colIndex) => (
                                     <td

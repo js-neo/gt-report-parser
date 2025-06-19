@@ -8,7 +8,7 @@ import {Check, X} from 'lucide-react';
 import {FileUpload} from '@/components/FileUpload';
 import {ColumnEditor} from '@/components/ColumnEditor';
 import {Button} from '@/components/UI/Button';
-import type {ExcelData, ColumnConfig} from '@/lib/types';
+import type {ExcelData, ColumnConfig, RowWithSapsanFlag} from '@/lib/types';
 import {ProgressBar} from "@/components/UI/ProgressBar";
 import {formatDateTime} from "@/utils";
 import {processExcelData} from "@/lib/excelParser";
@@ -24,7 +24,7 @@ export default function Home() {
     const [isSLVMode, setIsSLVMode] = useState(true);
     const router = useRouter();
 
-    const slvTableHeaders = ['Номер заказа', 'Время заказа', 'Стоимость', 'Сумма клиента',
+    const slvTableHeaders = ['Номер заказа', 'Время заказа', 'Текущий статус', 'Стоимость', 'Сумма клиента',
         'Организация', 'Адрес', 'Исполнитель', 'Автомобиль', 'Комментарий', 'Клиент', 'Парк партнёр', 'Доплата'];
 
     useEffect(() => {
@@ -161,10 +161,11 @@ export default function Home() {
             const comment = String(row[commentColumnKey] || '').toLowerCase();
             const executor = String(row[executorColumnKey] || '').trim();
 
-            if (comment.includes('сапсан')) {
+            if (comment.includes('сапсан наличные')) {
                 return {
                     ...row,
-                    [customerColumnKey]: 'Сапсан'
+                    [customerColumnKey]: 'Сапсан',
+                    _isSapsan: true
                 }
             }
 
@@ -254,7 +255,10 @@ export default function Home() {
                 }
             }
 
-            return row;
+            return {
+                ...row,
+                _isSapsan: false
+            };
 
         })
 
@@ -283,7 +287,8 @@ export default function Home() {
         const processedData = {
             headers: Object.values(columnMapping),
             rows: rows.map(row => {
-                const processedRow: Record<string, unknown> = {};
+                const processedRow: RowWithSapsanFlag = {};
+                const typedRow = row as RowWithSapsanFlag
                 for (const [originalId, newName] of Object.entries(columnMapping)) {
                     if (row[originalId] instanceof Date) {
                         processedRow[newName] = formatDateTime(row[originalId] as Date);
@@ -291,6 +296,7 @@ export default function Home() {
                         processedRow[newName] = row[originalId];
                     }
                 }
+                processedRow._isSapsan = typedRow._isSapsan;
                 return processedRow;
             }),
             initialSort: timeColumnKey ? {

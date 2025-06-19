@@ -1,5 +1,7 @@
 // src/lib/types.ts
 
+export type RowWithSapsanFlag = Record<string, unknown> & { _isSapsan?: boolean };
+
 export interface ExcelData {
     headers: string[];
     rows: Record<string, unknown>[];
@@ -13,7 +15,11 @@ export interface ColumnConfig {
 
 export interface ProcessedData {
     headers: string[];
-    rows: Record<string, unknown>[];
+    rows: RowWithSapsanFlag[];
+    initialSort?: {
+        key: string;
+        direction: 'asc' | 'desc';
+    };
 }
 
 export interface ExcelParser {
