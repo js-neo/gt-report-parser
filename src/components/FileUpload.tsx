@@ -68,7 +68,9 @@ export const FileUpload = ({ onUploadAction, acceptOnly }: FileUploadProps) => {
             <div className="flex flex-col items-center gap-4">
                 <FileUp className="w-12 h-12 text-primary" />
                 <div>
-                    <Button variant="outline" size="lg">
+                    <Button variant="outline"
+                            size="lg"
+                            tooltip={acceptOnly ? `Обязательные колонки: ${acceptOnly.join(', ')}` : undefined}>
                         Выберите файл
                     </Button>
                     <p className="text-sm text-muted-foreground mt-2">

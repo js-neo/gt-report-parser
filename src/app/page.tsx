@@ -17,7 +17,9 @@ import {Label} from '@/components/UI/Label';
 
 export default function Home() {
     const [excelData, setExcelData] = useState<ExcelData | null>(null);
-    const [partnerData, setPartnerData] = useState<ExcelData | null>(null);
+    const [partnerDataSPB, setPartnerDataSPB] = useState<ExcelData | null>(null);
+    const [excelDataMoscow, setExcelDataMoscow] = useState<ExcelData | null>(null);
+    const [partnerDataMoscow, setPartnerDataMoscow] = useState<ExcelData | null>(null);
     const [columns, setColumns] = useState<ColumnConfig[]>([]);
     const [isProcessing, setIsProcessing] = useState(false);
     const [progress, setProgress] = useState(0);
@@ -44,16 +46,28 @@ export default function Home() {
         }
     }, []);
 
-    const handleFileUpload = useCallback((data: ExcelData) => {
-        setExcelData(data);
+    const checkCityAddress = (data: ExcelData, city: string): boolean => {
+        const addressColumn = data.headers.find(header =>
+            header.toLowerCase().includes('адрес'));
+        if (!addressColumn) return false;
+        return data.rows.some(row =>
+            String(row[addressColumn]).toLowerCase().includes(city.toLowerCase()));
+    };
+
+    const handleFileUpload = useCallback((data: ExcelData, fileType: 'spb' | 'moscow') => {
+        const city = fileType === 'spb' ? 'санкт-петербург' : 'москва';
+        if (!checkCityAddress(data, city)) {
+            alert(`В файле не найдены адреса с указанием города ${city}`);
+            return;
+        }
+
+        if (fileType === 'spb') {
+            setExcelData(data);
+        } else {
+            setExcelDataMoscow(data);
+        }
 
         if (isSLVMode) {
-            /*const filteredHeaders = data.headers.filter(header =>
-                slvTableHeaders.some(slvHeader =>
-                    header.toLowerCase().includes(slvHeader.toLowerCase())
-                )
-            );*/
-
             const slvColumns: ColumnConfig[] = slvTableHeaders.map(header => {
                 const existingHeader = data.headers.find(h =>
                     h.toLowerCase().includes(header.toLowerCase())
@@ -76,8 +90,25 @@ export default function Home() {
         }
     }, [isSLVMode]);
 
-    const handlePartnerFileUpload = useCallback((data: ExcelData) => {
-        setPartnerData(data);
+    const handlePartnerFileUpload = useCallback((data: ExcelData, city: 'spb' | 'moscow') => {
+        const requiredCity = city === 'spb' ? 'санкт-петербург' : 'москва';
+        if (!checkCityAddress(data, requiredCity)) {
+            alert(`В файле партнёра не найдены адреса с указанием города ${requiredCity}`);
+            return;
+        }
+        const hasPartnerColumn = data.headers.find(header =>
+            header.toLowerCase().includes('партнер'));
+
+        if (!hasPartnerColumn) {
+            alert('В файле партнёра отсутствует колонка "Партнер"');
+        }
+
+        if (city === 'spb') {
+            setPartnerDataSPB(data);
+        } else {
+            setPartnerDataMoscow(data);
+        }
+
     }, []);
 
     const removePhoneNumber = (text: string): string => {
@@ -262,15 +293,29 @@ export default function Home() {
 
         })
 
-        if (isSLVMode && partnerData) {
-            const partnerMapping = partnerData.rows.reduce((acc, row) => {
-                const orderNumber = row['Номер заказа'];
-                const partner = row['Партнер'];
-                if (orderNumber && partner) {
-                    acc[String(orderNumber)] = String(partner);
-                }
-                return acc;
-            }, {} as Record<string, string>);
+        if (isSLVMode && (partnerDataSPB || partnerDataMoscow)) {
+            const partnerMapping: Record<string, string> = {};
+
+            if (partnerDataSPB) {
+                partnerDataSPB.rows.forEach(row => {
+                    const orderNumber = row['Номер заказа'];
+                    const partner = row['Партнер'];
+                    if (orderNumber && partner) {
+                        partnerMapping[String(orderNumber)] = String(partner);
+                    }
+                });
+            }
+
+            if (partnerDataMoscow) {
+                partnerDataMoscow.rows.forEach(row => {
+                    const orderNumber = row['Номер заказа'];
+                    const partner = row['Партнер'];
+                    if (orderNumber && partner) {
+                        partnerMapping[String(orderNumber)] = String(partner);
+                    }
+                });
+            }
+
 
             rows = rows.map(row => {
                 const orderNumber = row['Номер заказа'];
@@ -345,6 +390,11 @@ export default function Home() {
         router.push('/preview');
     };
 
+    const allFilesUploaded = () => {
+        if (!isSLVMode) return !!excelData;
+        return !!excelData && !!partnerDataSPB && !!excelDataMoscow && !!partnerDataMoscow;
+    }
+
     return (
         <div className="container mx-auto px-4 py-8">
             <h1 className="text-3xl font-bold mb-6">GT-Report Parser</h1>
@@ -362,20 +412,55 @@ export default function Home() {
                         />
                         <Label htmlFor="slv-mode">Режим СЛВ</Label>
                     </div>
-                    <FileUpload onUploadAction={handleFileUpload}/>
+                    {isSLVMode ? (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="border p-4 rounded-lg">
+                                <h3 className="text-lg font-medium mb-2">Основной файл Санкт-Петербург</h3>
+                                <FileUpload
+                                    onUploadAction={(data) => handleFileUpload(data, 'spb')}
+                                />
+                            </div>
+                            <div className="border p-4 rounded-lg">
+                                <h3 className="text-lg font-medium mb-2">Файл партнёра Санкт-Петербург</h3>
+                                <FileUpload
+                                    onUploadAction={(data) => handlePartnerFileUpload(data, 'spb')}
+                                    acceptOnly={['Номер заказа', 'Партнер']}
+                                />
+                            </div>
+                            <div className="border p-4 rounded-lg">
+                                <h3 className="text-lg font-medium mb-2">Основной файл Москва</h3>
+                                <FileUpload
+                                    onUploadAction={(data) => handleFileUpload(data, 'moscow')}
+                                />
+                            </div>
+                            <div className="border p-4 rounded-lg">
+                                <h3 className="text-lg font-medium mb-2">Файл партнёра Москва</h3>
+                                <FileUpload
+                                    onUploadAction={(data) => handlePartnerFileUpload(data, 'moscow')}
+                                    acceptOnly={['Номер заказа', 'Партнер']}
+                                />
+                            </div>
+                        </div>
+                    ) : (
+                        <FileUpload onUploadAction={(data) => handleFileUpload(data, 'spb')}/>
+                    )}
                 </div>
             ) : (
                 <div className="space-y-6">
-                    {isSLVMode && !partnerData && (
-                        <div className="border p-4 rounded-lg">
-                            <h3 className="text-lg font-medium mb-2">Загрузите данные партнёров</h3>
-                            <p className="text-sm text-muted-foreground mb-4">
-                                Для режима СЛВ требуется файл с колонками &#34;Номер заказа&#34; и &#34;Партнер&#34;
-                            </p>
-                            <FileUpload
-                                onUploadAction={handlePartnerFileUpload}
-                                acceptOnly={['Номер заказа', 'Партнер']}
-                            />
+                    {isSLVMode && (
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div className="border p-3 rounded-lg">
+                                <p className="text-sm font-medium">СПБ основной: {excelData ? "✅" : "❌"}</p>
+                            </div>
+                            <div className="border p-3 rounded-lg">
+                                <p className="text-sm font-medium">СПБ партнёр: {partnerDataSPB ? "✅" : "❌"}</p>
+                            </div>
+                            <div className="border p-3 rounded-lg">
+                                <p className="text-sm font-medium">Москва основной: {excelDataMoscow ? "✅" : "❌"}</p>
+                            </div>
+                            <div className="border p-3 rounded-lg">
+                                <p className="text-sm font-medium">Москва партнёр: {partnerDataMoscow ? "✅" : "❌"}</p>
+                            </div>
                         </div>
                     )}
 
@@ -388,13 +473,16 @@ export default function Home() {
                         <Button
                             variant="outline"
                             onClick={handlePreview}
+                            disabled={!allFilesUploaded()}
+                            tooltip={!allFilesUploaded() ? "Загрузите все необходимые файлы" : undefined}
                         >
                             Предпросмотр
                         </Button>
 
                         <Button
                             onClick={handleProcess}
-                            disabled={isProcessing}
+                            disabled={isProcessing || !allFilesUploaded()}
+                            tooltip={!allFilesUploaded() ? "Загрузите все необходимые файлы" : undefined}
                         >
                             {isProcessing ? 'Обработка...' : 'Обработать'}
                         </Button>
