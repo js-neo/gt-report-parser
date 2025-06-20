@@ -1,10 +1,9 @@
 // src/app/page.tsx
-
 "use client"
 
 import {useState, useCallback, useEffect} from 'react';
 import {useRouter} from 'next/navigation';
-import {Check, X} from 'lucide-react';
+import {Check, ChevronRight, X} from 'lucide-react';
 import {FileUpload} from '@/components/FileUpload';
 import {ColumnEditor} from '@/components/ColumnEditor';
 import {Button} from '@/components/UI/Button';
@@ -12,11 +11,13 @@ import type {ExcelData, ColumnConfig, RowWithSapsanFlag} from '@/lib/types';
 import {ProgressBar} from "@/components/UI/ProgressBar";
 import {formatDateTime} from "@/utils";
 import {processExcelData} from "@/lib/excelParser";
-import {Toggle} from '@/components/UI/Toggle';
-import {Label} from '@/components/UI/Label';
+import {Toggle} from "@/components/UI/Toggle";
+import {Label} from "@/components/UI/Label";
+
+type UploadStep = 'main-spb' | 'partner-spb' | 'main-moscow' | 'partner-moscow';
 
 export default function Home() {
-    const [excelData, setExcelData] = useState<ExcelData | null>(null);
+    const [excelDataSPB, setExcelDataSPB] = useState<ExcelData | null>(null);
     const [partnerDataSPB, setPartnerDataSPB] = useState<ExcelData | null>(null);
     const [excelDataMoscow, setExcelDataMoscow] = useState<ExcelData | null>(null);
     const [partnerDataMoscow, setPartnerDataMoscow] = useState<ExcelData | null>(null);
@@ -24,6 +25,7 @@ export default function Home() {
     const [isProcessing, setIsProcessing] = useState(false);
     const [progress, setProgress] = useState(0);
     const [isSLVMode, setIsSLVMode] = useState(true);
+    const [currentStep, setCurrentStep] = useState<UploadStep>('main-spb');
     const router = useRouter();
 
     const slvTableHeaders = ['Номер заказа', 'Время заказа', 'Текущий статус', 'Стоимость', 'Сумма клиента',
@@ -33,7 +35,7 @@ export default function Home() {
         const savedPreviewData = sessionStorage.getItem('savedPreviewData');
         if (savedPreviewData) {
             const parsedData = JSON.parse(savedPreviewData);
-            setExcelData({
+            setExcelDataSPB({
                 headers: parsedData.headers,
                 rows: parsedData.rows
             });
@@ -54,62 +56,120 @@ export default function Home() {
             String(row[addressColumn]).toLowerCase().includes(city.toLowerCase()));
     };
 
-    const handleFileUpload = useCallback((data: ExcelData, fileType: 'spb' | 'moscow') => {
-        const city = fileType === 'spb' ? 'санкт-петербург' : 'москва';
+    const goToStep = (step: UploadStep) => {
+        setCurrentStep(step);
+    };
+
+    const handleFileUpload = useCallback((data: ExcelData, fileType: UploadStep) => {
+        const city = fileType.includes('spb') ? 'санкт-петербург' : 'москва';
         if (!checkCityAddress(data, city)) {
             alert(`В файле не найдены адреса с указанием города ${city}`);
-            return;
+            return false;
         }
 
-        if (fileType === 'spb') {
-            setExcelData(data);
-        } else {
+        if (fileType === 'main-spb') {
+            setExcelDataSPB(data);
+            setCurrentStep('partner-spb');
+        } else if (fileType === 'main-moscow') {
             setExcelDataMoscow(data);
-        }
+            setCurrentStep('partner-moscow');
+        } else if (fileType === 'partner-spb') {
+            const hasPartnerColumn = data.headers.find(header =>
+                header.toLowerCase().includes('партнер'));
 
-        if (isSLVMode) {
-            const slvColumns: ColumnConfig[] = slvTableHeaders.map(header => {
-                const existingHeader = data.headers.find(h =>
-                    h.toLowerCase().includes(header.toLowerCase())
-                );
-
-                return {
-                    id: existingHeader || header,
-                    name: header === 'Организация' ? 'Заказчик' : header,
-                    visible: true
-                };
-            });
-
-            setColumns(slvColumns);
-        } else {
-            setColumns(data.headers.map(header => ({
-                id: header,
-                name: header,
-                visible: true
-            })));
-        }
-    }, [isSLVMode]);
-
-    const handlePartnerFileUpload = useCallback((data: ExcelData, city: 'spb' | 'moscow') => {
-        const requiredCity = city === 'spb' ? 'санкт-петербург' : 'москва';
-        if (!checkCityAddress(data, requiredCity)) {
-            alert(`В файле партнёра не найдены адреса с указанием города ${requiredCity}`);
-            return;
-        }
-        const hasPartnerColumn = data.headers.find(header =>
-            header.toLowerCase().includes('партнер'));
-
-        if (!hasPartnerColumn) {
-            alert('В файле партнёра отсутствует колонка "Партнер"');
-        }
-
-        if (city === 'spb') {
+            if (!hasPartnerColumn) {
+                alert('В файле партнёра отсутствует колонка "Партнер"');
+                return false;
+            }
             setPartnerDataSPB(data);
-        } else {
+            setCurrentStep('main-moscow');
+        } else if (fileType === 'partner-moscow') {
+            const hasPartnerColumn = data.headers.find(header =>
+                header.toLowerCase().includes('партнер'));
+
+            if (!hasPartnerColumn) {
+                alert('В файле партнёра отсутствует колонка "Партнер"');
+                return false;
+            }
             setPartnerDataMoscow(data);
         }
 
-    }, []);
+        if (fileType.includes('main')) {
+            if (isSLVMode) {
+                const slvColumns: ColumnConfig[] = slvTableHeaders.map(header => {
+                    const existingHeader = data.headers.find(h =>
+                        h.toLowerCase().includes(header.toLowerCase())
+                    );
+
+                    return {
+                        id: existingHeader || header,
+                        name: header === 'Организация' ? 'Заказчик' : header,
+                        visible: true
+                    };
+                });
+
+                setColumns(slvColumns);
+            } else {
+                setColumns(data.headers.map(header => ({
+                    id: header,
+                    name: header,
+                    visible: true
+                })));
+            }
+        }
+        return true;
+    }, [isSLVMode]);
+
+    const getUploadDescription = (step: UploadStep): string => {
+        switch (step) {
+            case 'main-spb':
+                return 'Загрузите основной файл для Санкт-Петербурга';
+            case 'partner-spb':
+                return 'Загрузите файл партнёров для Санкт-Петербурга (должен содержать колонки "Номер заказа" и "Партнер")';
+            case 'main-moscow':
+                return 'Загрузите основной файл для Москвы';
+            case 'partner-moscow':
+                return 'Загрузите файл партнёров для Москвы (должен содержать колонки "Номер заказа" и "Партнер")';
+            default:
+                return '';
+        }
+    };
+
+    const StepHeader = ({
+                            completed,
+                            current,
+                            stepNumber,
+                            title,
+                            onClick
+                        }: {
+        completed: boolean;
+        current: boolean;
+        stepNumber: number;
+        title: string;
+        onClick?: () => void;
+    }) => (
+        <div
+            className={`flex items-center gap-3 mb-4 ${onClick ? 'cursor-pointer hover:opacity-80' : ''}`}
+            onClick={onClick}
+        >
+            <div className={`flex items-center justify-center w-8 h-8 rounded-full ${
+                current ? 'bg-blue-500 text-white' :
+                    completed ? 'bg-green-500 text-white' : 'bg-gray-200'
+            }`}>
+                {completed ? <Check size={16}/> : stepNumber}
+            </div>
+            <h3 className="text-lg font-medium">{title}</h3>
+        </div>
+    );
+
+    const combineData = (): ExcelData | null => {
+        if (!excelDataSPB || !excelDataMoscow) return null;
+
+        return {
+            headers: excelDataSPB.headers,
+            rows: [...excelDataSPB.rows, ...excelDataMoscow.rows]
+        };
+    };
 
     const removePhoneNumber = (text: string): string => {
         const countryCodeRegex = /(\+7|7|8)\d{10}|(\+7|7|8)[\s\-]?\(?\d{3}\)?[\s\-]?\d{3}[\s\-]?\d{2}[\s\-]?\d{2}/g;
@@ -136,7 +196,6 @@ export default function Home() {
     };
 
     const processAndSaveData = (columns: ColumnConfig[], data: ExcelData) => {
-
         const columnMapping = columns.reduce((acc, column) => {
             if (column.visible) {
                 acc[column.id] = column.name;
@@ -290,7 +349,6 @@ export default function Home() {
                 ...row,
                 _isSapsan: false
             };
-
         })
 
         if (isSLVMode && (partnerDataSPB || partnerDataMoscow)) {
@@ -315,7 +373,6 @@ export default function Home() {
                     }
                 });
             }
-
 
             rows = rows.map(row => {
                 const orderNumber = row['Номер заказа'];
@@ -355,7 +412,8 @@ export default function Home() {
     };
 
     const handleProcess = async () => {
-        if (!excelData) return;
+        const data = isSLVMode ? combineData() : excelDataSPB;
+        if (!data) return;
 
         setIsProcessing(true);
         setProgress(0);
@@ -371,9 +429,8 @@ export default function Home() {
                 });
             }, 300);
 
-            await processExcelData(excelData, columns);
-
-            processAndSaveData(columns, excelData);
+            await processExcelData(data, columns);
+            processAndSaveData(columns, data);
 
             clearInterval(interval);
             setProgress(100);
@@ -385,21 +442,23 @@ export default function Home() {
     };
 
     const handlePreview = () => {
-        if (!excelData) return;
-        processAndSaveData(columns, excelData);
+        const data = isSLVMode ? combineData() : excelDataSPB;
+        if (!data) return;
+
+        processAndSaveData(columns, data);
         router.push('/preview');
     };
 
     const allFilesUploaded = () => {
-        if (!isSLVMode) return !!excelData;
-        return !!excelData && !!partnerDataSPB && !!excelDataMoscow && !!partnerDataMoscow;
+        if (!isSLVMode) return !!excelDataSPB;
+        return !!excelDataSPB && !!partnerDataSPB && !!excelDataMoscow && !!partnerDataMoscow;
     }
 
     return (
         <div className="container mx-auto px-4 py-8">
             <h1 className="text-3xl font-bold mb-6">GT-Report Parser</h1>
 
-            {!excelData ? (
+            {!allFilesUploaded() ? (
                 <div className="space-y-6">
                     <div className="flex items-center gap-4">
                         <Toggle
@@ -412,54 +471,157 @@ export default function Home() {
                         />
                         <Label htmlFor="slv-mode">Режим СЛВ</Label>
                     </div>
+
                     {isSLVMode ? (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <div className="border p-4 rounded-lg">
-                                <h3 className="text-lg font-medium mb-2">Основной файл Санкт-Петербург</h3>
-                                <FileUpload
-                                    onUploadAction={(data) => handleFileUpload(data, 'spb')}
+                        <div className="space-y-8">
+                            <div
+                                className={`border p-6 rounded-lg transition-all ${currentStep === 'main-spb' ? 'border-blue-500 bg-blue-50' : 'border-gray-200'}`}>
+                                <StepHeader
+                                    completed={!!excelDataSPB}
+                                    current={currentStep === 'main-spb'}
+                                    stepNumber={1}
+                                    title="Основной файл Санкт-Петербург"
+                                    onClick={excelDataSPB ? () => goToStep('main-spb') : undefined}
                                 />
+                                {currentStep === 'main-spb' && (
+                                    <>
+                                        <p className="text-sm text-muted-foreground mb-4">
+                                            {getUploadDescription('main-spb')}
+                                        </p>
+                                        <FileUpload
+                                            onUploadAction={(data) => handleFileUpload(data, 'main-spb')}
+                                        />
+                                    </>
+                                )}
                             </div>
-                            <div className="border p-4 rounded-lg">
-                                <h3 className="text-lg font-medium mb-2">Файл партнёра Санкт-Петербург</h3>
-                                <FileUpload
-                                    onUploadAction={(data) => handlePartnerFileUpload(data, 'spb')}
-                                    acceptOnly={['Номер заказа', 'Партнер']}
+
+                            <ChevronRight className="mx-auto text-gray-400"/>
+
+                            <div
+                                className={`border p-6 rounded-lg transition-all ${currentStep === 'partner-spb' ? 'border-blue-500 bg-blue-50' : 'border-gray-200'}`}>
+                                <StepHeader
+                                    completed={!!partnerDataSPB}
+                                    current={currentStep === 'partner-spb'}
+                                    stepNumber={2}
+                                    title="Файл партнёра Санкт-Петербург"
+                                    onClick={partnerDataSPB ? () => goToStep('partner-spb') : undefined}
                                 />
+                                {currentStep === 'partner-spb' && (
+                                    <>
+                                        <div className="flex justify-between items-center mb-4">
+                                            <p className="text-sm text-muted-foreground">
+                                                {getUploadDescription('partner-spb')}
+                                            </p>
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() => goToStep('main-spb')}
+                                            >
+                                                ← Назад
+                                            </Button>
+                                        </div>
+                                        <FileUpload
+                                            onUploadAction={(data) => handleFileUpload(data, 'partner-spb')}
+                                            acceptOnly={['Номер заказа', 'Партнер']}
+                                        />
+                                    </>
+                                )}
                             </div>
-                            <div className="border p-4 rounded-lg">
-                                <h3 className="text-lg font-medium mb-2">Основной файл Москва</h3>
-                                <FileUpload
-                                    onUploadAction={(data) => handleFileUpload(data, 'moscow')}
+
+                            <ChevronRight className="mx-auto text-gray-400"/>
+
+                            <div
+                                className={`border p-6 rounded-lg transition-all ${currentStep === 'main-moscow' ? 'border-blue-500 bg-blue-50' : 'border-gray-200'}`}>
+                                <StepHeader
+                                    completed={!!excelDataMoscow}
+                                    current={currentStep === 'main-moscow'}
+                                    stepNumber={3}
+                                    title="Основной файл Москва"
+                                    onClick={excelDataMoscow ? () => goToStep('main-moscow') : undefined}
                                 />
+                                {currentStep === 'main-moscow' && (
+                                    <>
+                                        <div className="flex justify-between items-center mb-4">
+                                            <p className="text-sm text-muted-foreground">
+                                                {getUploadDescription('main-moscow')}
+                                            </p>
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() => goToStep('partner-spb')}
+                                            >
+                                                ← Назад
+                                            </Button>
+                                        </div>
+                                        <FileUpload
+                                            onUploadAction={(data) => handleFileUpload(data, 'main-moscow')}
+                                        />
+                                    </>
+                                )}
                             </div>
-                            <div className="border p-4 rounded-lg">
-                                <h3 className="text-lg font-medium mb-2">Файл партнёра Москва</h3>
-                                <FileUpload
-                                    onUploadAction={(data) => handlePartnerFileUpload(data, 'moscow')}
-                                    acceptOnly={['Номер заказа', 'Партнер']}
+
+                            <ChevronRight className="mx-auto text-gray-400"/>
+
+                            <div
+                                className={`border p-6 rounded-lg transition-all ${currentStep === 'partner-moscow' ? 'border-blue-500 bg-blue-50' : 'border-gray-200'}`}>
+                                <StepHeader
+                                    completed={!!partnerDataMoscow}
+                                    current={currentStep === 'partner-moscow'}
+                                    stepNumber={4}
+                                    title="Файл партнёра Москва"
+                                    onClick={partnerDataMoscow ? () => goToStep('partner-moscow') : undefined}
                                 />
+                                {currentStep === 'partner-moscow' && (
+                                    <>
+                                        <div className="flex justify-between items-center mb-4">
+                                            <p className="text-sm text-muted-foreground">
+                                                {getUploadDescription('partner-moscow')}
+                                            </p>
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() => goToStep('main-moscow')}
+                                            >
+                                                ← Назад
+                                            </Button>
+                                        </div>
+                                        <FileUpload
+                                            onUploadAction={(data) => handleFileUpload(data, 'partner-moscow')}
+                                            acceptOnly={['Номер заказа', 'Партнер']}
+                                        />
+                                    </>
+                                )}
                             </div>
                         </div>
                     ) : (
-                        <FileUpload onUploadAction={(data) => handleFileUpload(data, 'spb')}/>
+                        <div className="border p-6 rounded-lg">
+                            <h3 className="text-lg font-medium mb-4">Загрузите основной файл</h3>
+                            <FileUpload onUploadAction={(data) => {
+                                setExcelDataSPB(data);
+                                setColumns(data.headers.map(header => ({
+                                    id: header,
+                                    name: header,
+                                    visible: true
+                                })));
+                            }}/>
+                        </div>
                     )}
                 </div>
             ) : (
                 <div className="space-y-6">
                     {isSLVMode && (
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            <div className="border p-3 rounded-lg">
-                                <p className="text-sm font-medium">СПБ основной: {excelData ? "✅" : "❌"}</p>
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                            <div className="border p-3 rounded-lg bg-green-50">
+                                <p className="text-sm font-medium">СПБ основной: ✅</p>
                             </div>
-                            <div className="border p-3 rounded-lg">
-                                <p className="text-sm font-medium">СПБ партнёр: {partnerDataSPB ? "✅" : "❌"}</p>
+                            <div className="border p-3 rounded-lg bg-green-50">
+                                <p className="text-sm font-medium">СПБ партнёр: ✅</p>
                             </div>
-                            <div className="border p-3 rounded-lg">
-                                <p className="text-sm font-medium">Москва основной: {excelDataMoscow ? "✅" : "❌"}</p>
+                            <div className="border p-3 rounded-lg bg-green-50">
+                                <p className="text-sm font-medium">Москва основной: ✅</p>
                             </div>
-                            <div className="border p-3 rounded-lg">
-                                <p className="text-sm font-medium">Москва партнёр: {partnerDataMoscow ? "✅" : "❌"}</p>
+                            <div className="border p-3 rounded-lg bg-green-50">
+                                <p className="text-sm font-medium">Москва партнёр: ✅</p>
                             </div>
                         </div>
                     )}
@@ -473,16 +635,13 @@ export default function Home() {
                         <Button
                             variant="outline"
                             onClick={handlePreview}
-                            disabled={!allFilesUploaded()}
-                            tooltip={!allFilesUploaded() ? "Загрузите все необходимые файлы" : undefined}
                         >
                             Предпросмотр
                         </Button>
 
                         <Button
                             onClick={handleProcess}
-                            disabled={isProcessing || !allFilesUploaded()}
-                            tooltip={!allFilesUploaded() ? "Загрузите все необходимые файлы" : undefined}
+                            disabled={isProcessing}
                         >
                             {isProcessing ? 'Обработка...' : 'Обработать'}
                         </Button>
