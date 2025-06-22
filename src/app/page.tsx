@@ -1,4 +1,3 @@
-// src/app/page.tsx
 "use client"
 
 import {useState, useCallback, useEffect} from 'react';
@@ -15,6 +14,17 @@ import {Toggle} from "@/components/UI/Toggle";
 import {Label} from "@/components/UI/Label";
 
 type UploadStep = 'main-spb' | 'partner-spb' | 'main-moscow' | 'partner-moscow';
+
+const minRateSPB = {
+    base: 2250
+};
+
+const minRateMSK = {
+    base: 3200,
+    domodedovo: 4100,
+    gukovskiy: 4500,
+    port_port: 6000
+};
 
 export default function Home() {
     const [excelDataSPB, setExcelDataSPB] = useState<ExcelData | null>(null);
@@ -47,6 +57,38 @@ export default function Home() {
             sessionStorage.removeItem('savedPreviewData');
         }
     }, []);
+
+    const getCityFromAddress = (address: string): 'spb' | 'msk' | null => {
+        if (!address) return null;
+        const addressLower = address.toLowerCase();
+        if (addressLower.includes('москва')) return 'msk';
+        if (addressLower.includes('санкт-петербург') || addressLower.includes('спб')) return 'spb';
+        return null;
+    };
+
+    const handleString = (str: string) => {
+        const [, aPart, bPart] = str.split(/A\)|B\)/);
+        const pointA = aPart?.trim().replace(/;$/, '') ?? '';
+        const pointB = bPart?.trim().replace(/;$/, '') ?? '';
+        return {pointA, pointB};
+    };
+
+    const getMoscowMinRate = (address: string) => {
+        const {pointA, pointB} = handleString(address);
+        const pointALower = pointA.toLowerCase();
+        const pointBLower = pointB.toLowerCase();
+
+        if (pointALower.includes('аэропорт') && pointBLower.includes('аэропорт')) {
+            return minRateMSK.port_port;
+        }
+        if (pointALower.includes('домодедово') || pointBLower.includes('домодедово')) {
+            return minRateMSK.domodedovo;
+        }
+        if (pointALower.includes('жуковский') || pointBLower.includes('жуковский')) {
+            return minRateMSK.gukovskiy;
+        }
+        return minRateMSK.base;
+    };
 
     const checkCityAddress = (data: ExcelData, city: string): boolean => {
         const addressColumn = data.headers.find(header =>
@@ -180,14 +222,14 @@ export default function Home() {
 
         let match;
         while ((match = countryCodeRegex.exec(text)) !== null) {
-            console.log(`[Номер с кодом] Найдено: "${match[0]}" (позиция ${match.index})`);
+            // console.log(`[Номер с кодом] Найдено: "${match[0]}" (позиция ${match.index})`);
             result = result.replace(match[0], '');
             hasCountryCodeNumbers = true;
         }
 
         if (!hasCountryCodeNumbers) {
             while ((match = localPhoneRegex.exec(text)) !== null) {
-                console.log(`[Локальный номер] Найдено: "${match[0]}" (позиция ${match.index})`);
+                // console.log(`[Локальный номер] Найдено: "${match[0]}" (позиция ${match.index})`);
                 result = result.replace(match[0], '');
             }
         }
@@ -203,10 +245,108 @@ export default function Home() {
             return acc;
         }, {} as Record<string, string>);
 
+        if (!isSLVMode) {
+            const processedData = {
+                headers: data.headers,
+                rows: data.rows.map(row => ({...row})),
+                initialSort: null
+            };
+            sessionStorage.setItem('processedData', JSON.stringify(processedData));
+            return processedData;
+        }
+
         let rows = [...data.rows];
+
         const timeColumnKey = Object.keys(columnMapping).find(key =>
             columnMapping[key].toLowerCase().includes('время заказа')
         );
+
+        const commentColumnKey = Object.keys(columnMapping).find(key =>
+            columnMapping[key].toLowerCase().includes('комментарий'));
+
+        const addressColumnKey = Object.keys(columnMapping).find(key =>
+            columnMapping[key].toLowerCase().includes('адрес'));
+
+        const costColumnKey = Object.keys(columnMapping).find(key =>
+            columnMapping[key].toLowerCase().includes('стоимость'));
+
+        const extraPaymentColumnKey = Object.keys(columnMapping).find(key =>
+            columnMapping[key].toLowerCase().includes('доплата'));
+
+        const executorColumnKey = Object.keys(columnMapping).find(key =>
+            columnMapping[key].toLowerCase().includes('исполнитель'));
+
+        const customerColumnKey = Object.keys(columnMapping).find(key =>
+            columnMapping[key].toLowerCase().includes('заказчик'));
+
+        const clientColumnKey = Object.keys(columnMapping).find(key =>
+            columnMapping[key].toLowerCase().trim() === 'клиент');
+
+        const findTollPayments = (comment: string) => {
+            if (!comment) return [];
+
+            const tollRoadPatterns = [
+                {
+                    regex: /(платные? дороги?|платка|зсд)[^\d]*(\d+)\s*вкл/gi,
+                    processMatch: (match: RegExpExecArray) => parseInt(match[2], 10)
+                },
+                {
+                    regex: /зсд\/\+\s*(\d+)\s*зсд\s*вкл/gi,
+                    processMatch: (match: RegExpExecArray) => parseInt(match[1], 10)
+                }
+            ];
+
+            const parkingPatterns = [
+                {
+                    regex: /(платные? парковки?|парковка)[^\d]*(\d+)\s*вкл/gi,
+                    processMatch: (match: RegExpExecArray) => parseInt(match[2], 10)
+                }
+            ];
+
+            const payments: { type: string; amount: number, match: string }[] = [];
+
+            tollRoadPatterns.some(pattern => {
+                const regex = new RegExp(pattern.regex.source, pattern.regex.flags);
+                const match = regex.exec(comment);
+                if (match) {
+                    const amount = pattern.processMatch(match);
+                    if (!isNaN(amount)) {
+                        console.log(`[toll_road] Найдено: "${match[0]}" (сумма: ${amount})`);
+                        payments.push({
+                            type: 'toll_road',
+                            amount,
+                            match: match[0]
+                        });
+                        return true;
+                    }
+                }
+                return false;
+            });
+
+            parkingPatterns.some(pattern => {
+                const regex = new RegExp(pattern.regex.source, pattern.regex.flags);
+                const match = regex.exec(comment);
+                if (match) {
+                    const amount = pattern.processMatch(match);
+                    if (!isNaN(amount)) {
+                        console.log(`[parking] Найдено: "${match[0]}" (сумма: ${amount})`);
+                        payments.push({
+                            type: 'parking',
+                            amount,
+                            match: match[0]
+                        });
+                        return true;
+                    }
+                }
+                return false;
+            });
+
+            if (payments.length > 0) {
+                console.log('Итоговые платежи:', payments);
+            }
+
+            return payments;
+        };
 
         if (timeColumnKey) {
             rows.sort((a, b) => {
@@ -226,171 +366,141 @@ export default function Home() {
             });
         }
 
-        const commentColumnKey = Object.keys(columnMapping).find(key =>
-            columnMapping[key].toLowerCase().includes('комментарий'));
-
-        const executorColumnKey = Object.keys(columnMapping).find(key =>
-            columnMapping[key].toLowerCase().includes('исполнитель'));
-
-        const customerColumnKey = Object.keys(columnMapping).find(key =>
-            columnMapping[key].toLowerCase().includes('заказчик'));
-
-        const clientColumnKey = Object.keys(columnMapping).find(key =>
-            columnMapping[key].toLowerCase().trim() === 'клиент');
-
         rows = rows.map(row => {
+
+            const processedRow: RowWithSapsanFlag = {...row, _isSapsan: false, _isValueError: false};
+
             if (clientColumnKey) {
-                row[clientColumnKey] = '';
+                processedRow[clientColumnKey] = '';
             }
 
             if (commentColumnKey && row[commentColumnKey]) {
-                row[commentColumnKey] = removePhoneNumber(String(row[commentColumnKey]));
+                processedRow[commentColumnKey] = removePhoneNumber(String(row[commentColumnKey]));
             }
 
-            if (!commentColumnKey || !executorColumnKey || !customerColumnKey) return row;
-            const comment = String(row[commentColumnKey] || '').toLowerCase();
-            const executor = String(row[executorColumnKey] || '').trim();
+            if (commentColumnKey && customerColumnKey) {
+                const comment = String(processedRow[commentColumnKey] || '').toLowerCase();
 
-            if (comment.includes('сапсан наличные')) {
-                return {
-                    ...row,
-                    [customerColumnKey]: 'Сапсан',
-                    _isSapsan: true
+                if (comment.includes('сапсан наличные')) {
+                    processedRow._isSapsan = true;
+                    processedRow[customerColumnKey] = 'Сапсан';
                 }
             }
 
-            if (executor) return row;
+            /*console.log(`!processedRow[executorColumnKey] заказ ${processedRow['Номер заказа']}: `, executorColumnKey &&
+            typeof processedRow[executorColumnKey] === 'string' ?
+                processedRow[executorColumnKey].length : "Нет колонки Исполнитель");*/
+            if (commentColumnKey && executorColumnKey) {
 
-            if (comment.includes('асонов')) {
-                return {
-                    ...row,
-                    [executorColumnKey]: 'Асонов'
+                const executorValue = String(processedRow[executorColumnKey] || '').trim();
+                const comment = String(processedRow[commentColumnKey] || '').trim().toLowerCase();
+
+                if (!executorValue) {
+                    const isAsonov = (comment: string): boolean =>
+                        comment.includes('асонов');
+
+                    const yandexPatterns = [
+                        /я$/i, /як$/i, /яким$/i, /яков$/i, /\dя$/i, /\dяк$/i, /\dяким$/i, /\dяков$/i,
+                        /я\d{3}$/i, /\dя\d{3}$/i, /\/я$/i, /\/як$/i, /\/яким$/i, /\/яков$/i,
+                        /\/яков/i, /\/яким/i, /\sя$/i, /\sяк$/i, /\sяким$/i, /\sяков$/i,
+                        /я[^а-яё]*$/i, /як[^а-яё]*$/i, /яким[^а-яё]*$/i
+                    ];
+
+                    const isYandex = (comment: string): boolean => {
+                        const exceptionRegs = [/ния$/i, /парадная\s*\d*$/i];
+                        const isException = exceptionRegs.some(reg => reg.test(comment));
+                        if (isException) return false;
+                        return yandexPatterns.some(pattern => pattern.test(comment));
+                    };
+
+                    const viliPatterns = [
+                        /влад\d{3}$/i, /\/в$/i, /в$/i, /\/в\s*$/i, /\dв\d{3}$/i, /\d\/в/i, /\dв$/i,
+                    ];
+
+                    const isVili = (comment: string): boolean => {
+                        const exceptionRegs = [/ов$/];
+                        const isException = exceptionRegs.some(reg => reg.test(comment));
+                        if (isException) return false;
+                        return viliPatterns.some(pattern => pattern.test(comment));
+                    };
+
+                    const executorPatterns = [
+                        {test: isAsonov, value: 'Асонов'},
+                        {test: isYandex, value: 'Яндекс'},
+                        {test: isVili, value: 'Вили'},
+                    ];
+
+                    const executor = executorPatterns.find(({test}) => test(comment))?.value;
+
+                    if (executor) processedRow[executorColumnKey] = executor;
                 }
             }
 
-            const yandexPatterns = [
-                /я$/i,
-                /як$/i,
-                /яким$/i,
-                /яков$/i,
-                /\dя$/i,
-                /\dяк$/i,
-                /\dяким$/i,
-                /\dяков$/i,
-                /я\d{3}$/i,
-                /\dя\d{3}$/i,
-                /\/я$/i,
-                /\/як$/i,
-                /\/яким$/i,
-                /\/яков$/i,
-                /\/яков/i,
-                /\/яким/i,
-                /\sя$/i,
-                /\sяк$/i,
-                /\sяким$/i,
-                /\sяков$/i,
-                /я[^а-яё]*$/i,
-                /як[^а-яё]*$/i,
-                /яким[^а-яё]*$/i
-            ];
+            if (commentColumnKey && addressColumnKey && costColumnKey && extraPaymentColumnKey && !processedRow._isSapsan) {
+                const comment = String(processedRow[commentColumnKey] || '');
+                const address = String(processedRow[addressColumnKey] || '');
+                const currentCost = Number(processedRow[costColumnKey]) || 0;
 
-            const isYandex = (comment: unknown) => {
-                const commentText = String(comment || '').toLowerCase();
-                const exceptionRegs = [/ния$/i, /парадная\s*\d*$/i];
-                const isException = exceptionRegs.some(reg => reg.test(commentText));
-                if (isException) return false;
-                return yandexPatterns.some(pattern => {
-                    const matched = pattern.test(commentText);
-                    if (matched) console.log(`Matched pattern: ${pattern} for text: ${commentText}`);
-                    return matched;
-                });
-            };
+                console.log(`Заказ ${processedRow['Номер заказа']} стоимость: ${currentCost}`);
 
-            if (isYandex(row[commentColumnKey])) {
-                return {
-                    ...row,
-                    [executorColumnKey]: 'Яндекс'
+                const payments = findTollPayments(comment);
+                if (payments.length > 0) {
+                    const city = getCityFromAddress(address);
+
+                    if (!city) {
+                        processedRow._isValueError = true;
+                        return processedRow;
+                    }
+
+                    const minRate = city === 'spb' ? minRateSPB.base : getMoscowMinRate(address);
+
+                    if (currentCost <= minRate) {
+                        processedRow._isValueError = true;
+                        return processedRow;
+                    }
+
+                    const totalExtra = payments.reduce((sum, payment) => sum + payment.amount, 0);
+
+                    processedRow[costColumnKey] = currentCost - totalExtra;
+                    processedRow[extraPaymentColumnKey] = (Number(processedRow[extraPaymentColumnKey]) || 0) + totalExtra;
+                } else if (
+                    /(платные? дороги?|платка|зсд|платные? парковки?|парковка)/i.test(comment) &&
+                    !/вкл/i.test(comment)
+                ) {
+                    processedRow._isValueError = true;
                 }
             }
 
-            const viliPatterns = [
-                /влад\d{3}$/i,
-                /\/в$/i,
-                /в$/i,
-                /\/в\s*$/i,
-                /\dв\d{3}$/i,
-                /\d\/в/i,
-                /\dв$/i,
-            ];
+            return processedRow;
+        });
 
-            const isVili = (comment: unknown) => {
-                const commentText = String(comment || '');
-                const exceptionRegs = [/ов$/];
-                const isException = exceptionRegs.some(reg => reg.test(commentText));
-                if (isException) {
-                    console.log('Не добавлено по исключению:', commentText);
-                    return false;
-                }
-                return viliPatterns.some(pattern => {
-                    const matched = pattern.test(commentText);
-                    if (matched) console.log(`Matched Vili pattern: ${pattern} for text: ${commentText}`);
-                    return matched;
-                });
-            };
-
-            if (isVili(row[commentColumnKey])) {
-                return {
-                    ...row,
-                    [executorColumnKey]: 'Вили'
-                }
-            }
-
-            return {
-                ...row,
-                _isSapsan: false
-            };
-        })
-
-        if (isSLVMode && (partnerDataSPB || partnerDataMoscow)) {
+        if (partnerDataSPB || partnerDataMoscow) {
             const partnerMapping: Record<string, string> = {};
 
-            if (partnerDataSPB) {
-                partnerDataSPB.rows.forEach(row => {
+            [partnerDataSPB, partnerDataMoscow]
+                .filter((data): data is ExcelData => data !== null)
+                .forEach(data => {
+                data.rows.forEach(row => {
                     const orderNumber = row['Номер заказа'];
                     const partner = row['Партнер'];
                     if (orderNumber && partner) {
                         partnerMapping[String(orderNumber)] = String(partner);
                     }
                 });
-            }
-
-            if (partnerDataMoscow) {
-                partnerDataMoscow.rows.forEach(row => {
-                    const orderNumber = row['Номер заказа'];
-                    const partner = row['Партнер'];
-                    if (orderNumber && partner) {
-                        partnerMapping[String(orderNumber)] = String(partner);
-                    }
-                });
-            }
-
-            rows = rows.map(row => {
-                const orderNumber = row['Номер заказа'];
-                const partner = orderNumber ? partnerMapping[String(orderNumber)] : undefined;
-
-                return {
-                    ...row,
-                    'Парк партнёр': partner || '',
-                    'Доплата': row['Доплата'] || ''
-                };
             });
+
+            rows = rows.map(row => ({
+                ...row,
+                'Парк партнёр': partnerMapping[String(row['Номер заказа'])] || '',
+                'Доплата': row['Доплата'] || ''
+            }));
         }
 
         const processedData = {
             headers: Object.values(columnMapping),
             rows: rows.map(row => {
                 const processedRow: RowWithSapsanFlag = {};
-                const typedRow = row as RowWithSapsanFlag
+                const typedRow = row as RowWithSapsanFlag;
                 for (const [originalId, newName] of Object.entries(columnMapping)) {
                     if (row[originalId] instanceof Date) {
                         processedRow[newName] = formatDateTime(row[originalId] as Date);
@@ -399,6 +509,7 @@ export default function Home() {
                     }
                 }
                 processedRow._isSapsan = typedRow._isSapsan;
+                processedRow._isValueError = typedRow._isValueError;
                 return processedRow;
             }),
             initialSort: timeColumnKey ? {
@@ -409,7 +520,8 @@ export default function Home() {
 
         sessionStorage.setItem('processedData', JSON.stringify(processedData));
         return processedData;
-    };
+    }
+
 
     const handleProcess = async () => {
         const data = isSLVMode ? combineData() : excelDataSPB;

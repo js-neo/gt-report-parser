@@ -73,8 +73,11 @@ const applyWorksheetFormatting = (worksheet: ExcelJS.Worksheet, headers: string[
         if (rowNumber === 1) return;
         const isEvenRow = rowNumber % 2 === 0;
         const isSapsan = row._isSapsan === true;
-        const rowFillColor = isSapsan ?
-            'FFE6FFE6' : isEvenRow ? 'FFF2F2F2' : 'FFFFFFFF';
+        const isValueError = row._isValueError === true;
+        const rowFillColor = isValueError ?
+            'FFFFCCCC' : isSapsan ?
+            'FFE6FFE6' : isEvenRow ?
+                    'FFF2F2F2' : 'FFFFFFFF';
 
         row.eachCell((cell, colNumber) => {
             const header = headers[colNumber - 1];
@@ -302,6 +305,9 @@ export const exportToExcel = async (data: ProcessedData, fileName: string) => {
         const addedRow = worksheet.addRow(rowData);
         if (row._isSapsan) {
             addedRow._isSapsan = true;
+        }
+        if (row._isValueError) {
+            addedRow._isValueError = true;
         }
     });
 

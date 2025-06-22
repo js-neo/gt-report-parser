@@ -1,6 +1,6 @@
 // src/lib/types.ts
 
-export type RowWithSapsanFlag = Record<string, unknown> & { _isSapsan?: boolean };
+export type RowWithSapsanFlag = Record<string, unknown> & { _isSapsan?: boolean, _isValueError?: boolean };
 
 export interface ExcelData {
     headers: string[];
