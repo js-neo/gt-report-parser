@@ -76,17 +76,23 @@ export default function PreviewPage() {
         return minDate && maxDate ? { minDate, maxDate } : null;
     }, [tableData]);
 
+    const formatDate = (date: Date) => {
+        const day = String(date.getDate()).padStart(2, '0');
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        return `${day}.${month}.${date.getFullYear()}`;
+    };
+
     const getReportFileName = () => {
         if (!dateRange) return 'processed-report';
-
-        const formatDate = (date: Date) => {
-            const day = String(date.getDate()).padStart(2, '0');
-            const month = String(date.getMonth() + 1).padStart(2, '0');
-            return `${day}.${month}.${date.getFullYear()}`;
-        };
-
         return `отчёт_за_период_${formatDate(dateRange.minDate)}_${formatDate(dateRange.maxDate)}`;
     };
+
+    const getReportPeriodTitle = () => {
+        if (!dateRange) return 'Нет информации о периоде';
+        return `Отчёт за период ${formatDate(dateRange.minDate)} - ${formatDate(dateRange.maxDate)}`;
+    };
+
+
 
     const sortedRows = useMemo(() => {
         if (!tableData?.rows || !sortConfig) return tableData?.rows || [];
@@ -158,7 +164,11 @@ export default function PreviewPage() {
     return (
         <div className="container mx-auto px-4 py-8 flex flex-col h-[calc(100vh-1rem)]">
             <div className="flex justify-between items-center mb-6">
-                <h1 className="text-3xl font-bold">Предпросмотр таблицы</h1>
+                <div>
+                    <h1 className="text-3xl font-bold">Предпросмотр таблицы</h1>
+                    <h2 className="font-light">{getReportPeriodTitle()}</h2>
+                </div>
+
                 <div className="flex gap-2">
                     <Button
                         onClick={handleBack}
