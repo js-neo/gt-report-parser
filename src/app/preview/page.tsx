@@ -1,7 +1,7 @@
 // src/app/preview/page.tsx
 'use client';
 
-import {useEffect, useMemo, useState} from 'react';
+import React, {useEffect, useMemo, useState, useRef} from 'react';
 import {useRouter} from 'next/navigation';
 import {Button} from '@/components/UI/Button';
 import {exportToExcel} from "@/lib/excelParser";
@@ -15,6 +15,11 @@ type SortConfig = {
     direction: 'asc' | 'desc';
 };
 
+type EditState = {
+    row: number;
+    cell: number;
+} | null;
+
 export default function PreviewPage() {
     const router = useRouter();
     const [tableData, setTableData] = useState<{
@@ -23,6 +28,8 @@ export default function PreviewPage() {
         initialSort?: SortConfig;
     } | null>(null);
     const [sortConfig, setSortConfig] = useState<SortConfig | null>(null);
+    const [edit, setEdit] = useState<EditState>(null);
+    const inputRef = useRef<HTMLInputElement>(null);
 
     const isWideColumn = (header: string) => {
         const wideColumnKeywords = ['адрес', 'комментарий', 'comment', 'описание', 'description'];
@@ -51,6 +58,12 @@ export default function PreviewPage() {
             router.push('/');
         }
     }, [router]);
+
+    useEffect(() => {
+        if (edit && inputRef.current) {
+            inputRef.current.focus();
+        }
+    }, [edit]);
 
     const dateRange = useMemo(() => {
         if (!tableData) return null;
@@ -92,8 +105,6 @@ export default function PreviewPage() {
         return `Отчёт за период ${formatDate(dateRange.minDate)} - ${formatDate(dateRange.maxDate)}`;
     };
 
-
-
     const sortedRows = useMemo(() => {
         if (!tableData?.rows || !sortConfig) return tableData?.rows || [];
         return [...tableData.rows].sort((a, b) => {
@@ -134,6 +145,70 @@ export default function PreviewPage() {
             sessionStorage.setItem('savedPreviewData', savedData);
         }
         router.push('/');
+    };
+
+    const showEditor = ( rowIndex: number, colIndex: number) => {
+        setEdit({
+            row: rowIndex,
+            cell: colIndex
+        });
+    };
+
+    const saveEdit = (e: React.FormEvent, rowIndex: number, colIndex: number, newValue: string) => {
+        e.preventDefault();
+
+        if (!tableData || edit === null) return;
+
+        const newData = {
+            ...tableData,
+            rows: [...tableData.rows]
+        };
+
+        const headerKey = newData.headers[colIndex];
+        newData.rows[rowIndex] = {
+            ...newData.rows[rowIndex],
+            [headerKey]: newValue
+        };
+
+        setTableData(newData);
+        setEdit(null);
+
+        sessionStorage.setItem('processedData', JSON.stringify(newData));
+    };
+
+    const handleKeyDown = (
+        e: React.KeyboardEvent<HTMLInputElement>,
+        rowIndex: number,
+        colIndex: number,
+        value: string
+    ) => {
+        if (!tableData) return;
+
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            saveEdit(e, rowIndex, colIndex, value);
+        }
+
+        if (e.key === 'Escape') {
+            setEdit(null);
+        }
+
+        if (edit && (e.key === 'ArrowUp' || e.key === 'ArrowDown' ||
+            e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+            e.preventDefault();
+
+            let newRow = edit.row;
+            let newCell = edit.cell;
+
+            if (e.key === 'ArrowUp' && edit.row > 0) newRow--;
+            if (e.key === 'ArrowDown' && edit.row < tableData.rows.length - 1) newRow++;
+            if (e.key === 'ArrowLeft' && edit.cell > 0) newCell--;
+            if (e.key === 'ArrowRight' && edit.cell < tableData.headers.length - 1) newCell++;
+
+            if (newRow !== edit.row || newCell !== edit.cell) {
+                setEdit({ row: newRow, cell: newCell });
+            }
+        }
     };
 
     const SortIcon = ({column}: { column: string }) => {
@@ -217,23 +292,49 @@ export default function PreviewPage() {
                             <tr
                                 key={rowIndex}
                                 className={cn(rowIndex % 2 === 0 ? 'bg-background' : 'bg-gray-50 dark:bg-gray-700',
-                                row._isSapsan && 'bg-green-100 dark:bg-green-900',
-                                row._isValueError && 'bg-red-100 dark:bg-red-900')}
+                                    row._isSapsan && 'bg-green-100 dark:bg-green-900',
+                                    row._isValueError && 'bg-red-100 dark:bg-red-900')}
                             >
                                 {tableData.headers.map((header, colIndex) => (
                                     <td
                                         key={colIndex}
+                                        onDoubleClick={() => showEditor(rowIndex, colIndex)}
+                                        data-row={rowIndex}
                                         className={cn(
                                             "px-1 py-2 text-sm text-center text-foreground border border-border",
                                             "border-gray-300 dark:border-gray-600",
                                             isWideColumn(header)
                                                 ? "max-w-[400px] min-w-[400px] break-words whitespace-normal"
-                                                : "max-w-[150px] min-w-[80px] break-words whitespace-normal"
+                                                : "max-w-[150px] min-w-[80px] break-words whitespace-normal",
+                                            edit?.row === rowIndex && edit?.cell === colIndex
+                                                ? "bg-blue-50 dark:bg-blue-900" : ""
                                         )}
                                     >
-                                        {isTimeColumn(header) && typeof row[header] === 'string' && row[header].toString().includes('T')
-                                            ? formatDateTime(new Date(row[header] as string))
-                                            : String(row[header] || '')}
+                                        {edit?.row === rowIndex && edit?.cell === colIndex ? (
+                                            <form
+                                                onSubmit={(e) => saveEdit(e, rowIndex, colIndex, String(row[header] || ''))}
+                                                className="w-full"
+                                            >
+                                                <input
+                                                    ref={inputRef}
+                                                    type="text"
+                                                    defaultValue={String(row[header] || '')}
+                                                    autoFocus
+                                                    onBlur={() => setEdit(null)}
+                                                    onKeyDown={(e) =>
+                                                        handleKeyDown(e, rowIndex, colIndex, e.currentTarget.value)
+                                                    }
+                                                    className={cn(
+                                                        "w-full p-1 border rounded-md bg-white dark:bg-gray-800",
+                                                        "border-blue-500 focus:ring-2 focus:ring-blue-500 outline-none"
+                                                    )}
+                                                />
+                                            </form>
+                                        ) : (
+                                            isTimeColumn(header) && typeof row[header] === 'string' && row[header].toString().includes('T')
+                                                ? formatDateTime(new Date(row[header] as string))
+                                                : String(row[header] || ''))
+                                        }
                                     </td>
                                 ))}
                             </tr>
