@@ -30,6 +30,7 @@ export default function PreviewPage() {
     const [sortConfig, setSortConfig] = useState<SortConfig | null>(null);
     const [edit, setEdit] = useState<EditState>(null);
     const inputRef = useRef<HTMLInputElement>(null);
+    const textareaRef = useRef<HTMLTextAreaElement>(null);
 
     const isWideColumn = (header: string) => {
         const wideColumnKeywords = ['адрес', 'комментарий', 'comment', 'описание', 'description'];
@@ -60,10 +61,14 @@ export default function PreviewPage() {
     }, [router]);
 
     useEffect(() => {
-        if (edit && inputRef.current) {
-            inputRef.current.focus();
+        if (edit) {
+            if (isWideColumn(tableData?.headers[edit.cell] || '')) {
+                setTimeout(() => textareaRef.current?.focus(), 10);
+            } else {
+                setTimeout(() => inputRef.current?.focus(), 10);
+            }
         }
-    }, [edit]);
+    }, [edit, tableData]);
 
     const dateRange = useMemo(() => {
         if (!tableData) return null;
@@ -147,7 +152,7 @@ export default function PreviewPage() {
         router.push('/');
     };
 
-    const showEditor = ( rowIndex: number, colIndex: number) => {
+    const showEditor = (rowIndex: number, colIndex: number) => {
         setEdit({
             row: rowIndex,
             cell: colIndex
@@ -177,14 +182,19 @@ export default function PreviewPage() {
     };
 
     const handleKeyDown = (
-        e: React.KeyboardEvent<HTMLInputElement>,
+        e: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>,
         rowIndex: number,
         colIndex: number,
         value: string
     ) => {
         if (!tableData) return;
 
-        if (e.key === 'Enter') {
+        if (e.key === 'Enter' && !(e.target instanceof HTMLTextAreaElement)) {
+            e.preventDefault();
+            saveEdit(e, rowIndex, colIndex, value);
+        }
+
+        if (e.key === 'Enter' && e.ctrlKey && e.target instanceof HTMLTextAreaElement) {
             e.preventDefault();
             saveEdit(e, rowIndex, colIndex, value);
         }
@@ -193,19 +203,19 @@ export default function PreviewPage() {
             setEdit(null);
         }
 
-        if (edit && (e.key === 'ArrowUp' || e.key === 'ArrowDown' ||
-            e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+        if (e.key === 'ArrowUp' || e.key === 'ArrowDown' ||
+            e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
             e.preventDefault();
 
-            let newRow = edit.row;
-            let newCell = edit.cell;
+            let newRow = edit?.row || rowIndex;
+            let newCell = edit?.cell || colIndex;
 
-            if (e.key === 'ArrowUp' && edit.row > 0) newRow--;
-            if (e.key === 'ArrowDown' && edit.row < tableData.rows.length - 1) newRow++;
-            if (e.key === 'ArrowLeft' && edit.cell > 0) newCell--;
-            if (e.key === 'ArrowRight' && edit.cell < tableData.headers.length - 1) newCell++;
+            if (e.key === 'ArrowUp' && newRow > 0) newRow--;
+            if (e.key === 'ArrowDown' && newRow < tableData.rows.length - 1) newRow++;
+            if (e.key === 'ArrowLeft' && newCell > 0) newCell--;
+            if (e.key === 'ArrowRight' && newCell < tableData.headers.length - 1) newCell++;
 
-            if (newRow !== edit.row || newCell !== edit.cell) {
+            if (newRow !== rowIndex || newCell !== colIndex) {
                 setEdit({ row: newRow, cell: newCell });
             }
         }
@@ -311,25 +321,50 @@ export default function PreviewPage() {
                                         )}
                                     >
                                         {edit?.row === rowIndex && edit?.cell === colIndex ? (
-                                            <form
-                                                onSubmit={(e) => saveEdit(e, rowIndex, colIndex, String(row[header] || ''))}
-                                                className="w-full"
-                                            >
-                                                <input
-                                                    ref={inputRef}
-                                                    type="text"
-                                                    defaultValue={String(row[header] || '')}
-                                                    autoFocus
-                                                    onBlur={() => setEdit(null)}
-                                                    onKeyDown={(e) =>
-                                                        handleKeyDown(e, rowIndex, colIndex, e.currentTarget.value)
-                                                    }
-                                                    className={cn(
-                                                        "w-full p-1 border rounded-md bg-white dark:bg-gray-800",
-                                                        "border-blue-500 focus:ring-2 focus:ring-blue-500 outline-none"
-                                                    )}
-                                                />
-                                            </form>
+                                            isWideColumn(header) ? (
+                                                <form
+                                                    onSubmit={(e) => saveEdit(e, rowIndex, colIndex, String(row[header] || ''))}
+                                                    className="w-full"
+                                                >
+                                                    <textarea
+                                                        ref={textareaRef}
+                                                        defaultValue={String(row[header] || '')}
+                                                        autoFocus
+                                                        onBlur={() => setEdit(null)}
+                                                        onKeyDown={(e) =>
+                                                            handleKeyDown(e, rowIndex, colIndex, e.currentTarget.value)
+                                                        }
+                                                        className={cn(
+                                                            "w-full min-h-[100px] p-1 border rounded-md bg-white dark:bg-gray-800",
+                                                            "border-blue-500 focus:ring-2 focus:ring-blue-500 outline-none",
+                                                            "resize-y"
+                                                        )}
+                                                    />
+                                                    <div className="mt-1 text-xs text-gray-500">
+                                                        Ctrl+Enter для сохранения
+                                                    </div>
+                                                </form>
+                                            ) : (
+                                                <form
+                                                    onSubmit={(e) => saveEdit(e, rowIndex, colIndex, String(row[header] || ''))}
+                                                    className="w-full"
+                                                >
+                                                    <input
+                                                        ref={inputRef}
+                                                        type="text"
+                                                        defaultValue={String(row[header] || '')}
+                                                        autoFocus
+                                                        onBlur={() => setEdit(null)}
+                                                        onKeyDown={(e) =>
+                                                            handleKeyDown(e, rowIndex, colIndex, e.currentTarget.value)
+                                                        }
+                                                        className={cn(
+                                                            "w-full p-1 border rounded-md bg-white dark:bg-gray-800",
+                                                            "border-blue-500 focus:ring-2 focus:ring-blue-500 outline-none"
+                                                        )}
+                                                    />
+                                                </form>
+                                            )
                                         ) : (
                                             isTimeColumn(header) && typeof row[header] === 'string' && row[header].toString().includes('T')
                                                 ? formatDateTime(new Date(row[header] as string))
