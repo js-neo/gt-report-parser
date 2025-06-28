@@ -5,10 +5,11 @@ import React, {useEffect, useMemo, useState, useRef} from 'react';
 import {useRouter} from 'next/navigation';
 import {Button} from '@/components/UI/Button';
 import {exportToExcel} from "@/lib/excelParser";
-import {FileUp, ArrowUp, ArrowDown, ChevronsUpDown} from 'lucide-react';
+import {FileUp, ArrowUp, ArrowDown, ChevronsUpDown, Filter} from 'lucide-react';
 import {formatDateTime, parseDateTime} from "@/utils";
 import {cn} from "@/utils";
 import {RowWithSapsanFlag} from "@/lib/types";
+import {Modal} from '@/components/UI/Modal';
 
 type SortConfig = {
     key: string;
@@ -20,6 +21,15 @@ type EditState = {
     cell: number;
 } | null;
 
+type FilterCondition = {
+    type: 'contains' | 'equals' | 'startsWith' | 'endsWith' | 'greater' | 'less';
+    value: string;
+};
+
+type FilterConfig = {
+    [key: string]: FilterCondition;
+};
+
 export default function PreviewPage() {
     const router = useRouter();
     const [tableData, setTableData] = useState<{
@@ -29,6 +39,9 @@ export default function PreviewPage() {
     } | null>(null);
     const [sortConfig, setSortConfig] = useState<SortConfig | null>(null);
     const [edit, setEdit] = useState<EditState>(null);
+    const [filters, setFilters] = useState<FilterConfig>({});
+    const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
+    const [currentFilterColumn, setCurrentFilterColumn] = useState<string | null>(null);
     const inputRef = useRef<HTMLInputElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -70,6 +83,18 @@ export default function PreviewPage() {
         }
     }, [edit, tableData]);
 
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.ctrlKey && e.shiftKey && e.key === 'L') {
+                e.preventDefault();
+                setIsFilterModalOpen(true);
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, []);
+
     const dateRange = useMemo(() => {
         if (!tableData) return null;
 
@@ -100,14 +125,16 @@ export default function PreviewPage() {
         return `${day}.${month}.${date.getFullYear()}`;
     };
 
-    const getReportFileName = () => {
-        if (!dateRange) return 'processed-report';
-        return `отчёт_за_период_${formatDate(dateRange.minDate)}_${formatDate(dateRange.maxDate)}`;
-    };
+    const getUniqueValues = (column: string) => {
+        if (!tableData) return [];
 
-    const getReportPeriodTitle = () => {
-        if (!dateRange) return 'Нет информации о периоде';
-        return `Отчёт за период ${formatDate(dateRange.minDate)} - ${formatDate(dateRange.maxDate)}`;
+        const values = new Set<string>();
+        tableData.rows.forEach(row => {
+            const value = String(row[column] || '').trim();
+            if (value) values.add(value);
+        });
+
+        return Array.from(values).sort();
     };
 
     const sortedRows = useMemo(() => {
@@ -137,11 +164,83 @@ export default function PreviewPage() {
         });
     }, [tableData, sortConfig]);
 
+    const filteredRows = useMemo(() => {
+        if (!sortedRows || Object.keys(filters).length === 0) return sortedRows;
+
+        return sortedRows.filter(row => {
+            return Object.entries(filters).every(([column, condition]) => {
+                const cellValue = String(row[column] || '').toLowerCase();
+                const filterValue = condition.value.toLowerCase();
+
+                switch (condition.type) {
+                    case 'contains':
+                        return cellValue.includes(filterValue);
+                    case 'equals':
+                        return cellValue === filterValue;
+                    case 'startsWith':
+                        return cellValue.startsWith(filterValue);
+                    case 'endsWith':
+                        return cellValue.endsWith(filterValue);
+                    case 'greater':
+                        if (isNumericColumn(column)) {
+                            return Number(row[column] || 0) > Number(filterValue);
+                        }
+                        return cellValue > filterValue;
+                    case 'less':
+                        if (isNumericColumn(column)) {
+                            return Number(row[column] || 0) < Number(filterValue);
+                        }
+                        return cellValue < filterValue;
+                    default:
+                        return true;
+                }
+            });
+        });
+    }, [sortedRows, filters]);
+
+    const getReportFileName = () => {
+        if (!dateRange) return 'processed-report';
+
+        const filterInfo = Object.entries(filters).map(([column, condition]) => {
+            return `${column} (${condition.type}: ${condition.value})`;
+        }).join(', ');
+
+        const baseName = `отчёт_за_период_${formatDate(dateRange.minDate)}_${formatDate(dateRange.maxDate)}`;
+
+        return filterInfo
+            ? `фильтрация_${baseName}_по_${filterInfo.slice(0, 50)}`
+            : baseName;
+    };
+
+    const getReportPeriodTitle = () => {
+        if (!dateRange) return 'Нет информации о периоде';
+        return `Отчёт за период ${formatDate(dateRange.minDate)} - ${formatDate(dateRange.maxDate)}`;
+    };
+
     const handleSort = (key: string) => {
         setSortConfig((prev) => ({
             key,
             direction: prev?.key === key && prev.direction === 'asc' ? 'desc' : 'asc'
         }));
+    };
+
+    const applyFilter = (column: string, condition: FilterCondition) => {
+        setFilters(prev => ({
+            ...prev,
+            [column]: condition
+        }));
+    };
+
+    const clearFilter = (column: string) => {
+        setFilters(prev => {
+            const newFilters = {...prev};
+            delete newFilters[column];
+            return newFilters;
+        });
+    };
+
+    const clearAllFilters = () => {
+        setFilters({});
     };
 
     const handleBack = () => {
@@ -194,7 +293,7 @@ export default function PreviewPage() {
             saveEdit(e, rowIndex, colIndex, value);
         }
 
-        if (e.key === 'Enter' && e.ctrlKey && e.target instanceof HTMLTextAreaElement) {
+        if (e.key === 'Enter' && e.ctrlKey && (e.target instanceof HTMLTextAreaElement)) {
             e.preventDefault();
             saveEdit(e, rowIndex, colIndex, value);
         }
@@ -238,6 +337,165 @@ export default function PreviewPage() {
         );
     };
 
+    const FilterIcon = ({ column }: { column: string }) => {
+        const isFiltered = !!filters[column];
+
+        return (
+            <span
+                className="inline-flex items-center ml-1 opacity-50 hover:opacity-100 cursor-pointer"
+                onClick={(e) => {
+                    e.stopPropagation();
+                    setCurrentFilterColumn(column);
+                    setIsFilterModalOpen(true);
+                }}
+                title="Фильтровать (Ctrl+Shift+L)"
+            >
+                <Filter
+                    size={16}
+                    className={isFiltered ? "text-blue-500" : "text-current"}
+                />
+            </span>
+        );
+    };
+
+    const FilterModalContent = ({
+                                    currentFilter,
+                                    uniqueValues,
+                                    onApply,
+                                    onClear,
+                                    isNumeric,
+                                    isTime
+                                }: {
+        currentFilter?: FilterCondition;
+        uniqueValues: string[];
+        onApply: (condition: FilterCondition) => void;
+        onClear: () => void;
+        isNumeric: boolean;
+        isTime: boolean;
+    }) => {
+        const [filterType, setFilterType] = useState<FilterCondition['type']>(currentFilter?.type || 'contains');
+        const [filterValue, setFilterValue] = useState(currentFilter?.value || '');
+        const [selectedValues, setSelectedValues] = useState<string[]>([]);
+
+        const handleApply = () => {
+            if (selectedValues.length > 0) {
+                onApply({
+                    type: 'equals',
+                    value: selectedValues.join('|')
+                });
+            } else if (filterValue.trim()) {
+                onApply({
+                    type: filterType,
+                    value: filterValue
+                });
+            }
+            setIsFilterModalOpen(false);
+        };
+
+        const handleClear = () => {
+            onClear();
+            setIsFilterModalOpen(false);
+        };
+
+        const filterTypes = [
+            { value: 'contains', label: 'содержит' },
+            { value: 'equals', label: 'равно' },
+            { value: 'startsWith', label: 'начинается с' },
+            { value: 'endsWith', label: 'заканчивается на' },
+        ];
+
+        if (isNumeric || isTime) {
+            filterTypes.push(
+                { value: 'greater', label: 'больше чем' },
+                { value: 'less', label: 'меньше чем' }
+            );
+        }
+
+        return (
+            <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                    <div>
+                        <label className="block text-sm font-medium mb-1">Тип фильтра</label>
+                        <select
+                            value={filterType}
+                            onChange={(e) => setFilterType(e.target.value as FilterCondition['type'])}
+                            className="w-full p-2 border rounded-md"
+                        >
+                            {filterTypes.map((type) => (
+                                <option key={type.value} value={type.value}>
+                                    {type.label}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-medium mb-1">Значение</label>
+                        <input
+                            type={isNumeric ? 'number' : 'text'}
+                            value={filterValue}
+                            onChange={(e) => setFilterValue(e.target.value)}
+                            className="w-full p-2 border rounded-md"
+                            placeholder="Введите значение..."
+                        />
+                    </div>
+                </div>
+
+                <div>
+                    <label className="block text-sm font-medium mb-1">Или выберите из списка:</label>
+                    <div className="max-h-60 overflow-y-auto border rounded-md p-2">
+                        {uniqueValues.length > 0 ? (
+                            uniqueValues.map((value) => (
+                                <div key={value} className="flex items-center gap-2 p-1 hover:bg-gray-100">
+                                    <input
+                                        type="checkbox"
+                                        id={`value-${value}`}
+                                        checked={selectedValues.includes(value)}
+                                        onChange={(e) => {
+                                            if (e.target.checked) {
+                                                setSelectedValues([...selectedValues, value]);
+                                            } else {
+                                                setSelectedValues(selectedValues.filter(v => v !== value));
+                                            }
+                                        }}
+                                    />
+                                    <label htmlFor={`value-${value}`} className="text-sm">
+                                        {value}
+                                    </label>
+                                </div>
+                            ))
+                        ) : (
+                            <p className="text-sm text-gray-500">Нет уникальных значений</p>
+                        )}
+                    </div>
+                </div>
+
+                <div className="flex justify-between pt-4 border-t">
+                    <button
+                        onClick={handleClear}
+                        className="px-4 py-2 text-sm text-red-600 hover:bg-red-50 rounded-md"
+                    >
+                        Сбросить
+                    </button>
+                    <div className="flex gap-2">
+                        <button
+                            onClick={() => setIsFilterModalOpen(false)}
+                            className="px-4 py-2 text-sm border rounded-md hover:bg-gray-50"
+                        >
+                            Отмена
+                        </button>
+                        <button
+                            onClick={handleApply}
+                            className="px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                        >
+                            Применить
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
     if (!tableData) {
         return (
             <div className="flex items-center justify-center h-screen">
@@ -263,7 +521,18 @@ export default function PreviewPage() {
                         Вернуться к редактированию
                     </Button>
                     <Button
-                        onClick={() => exportToExcel(tableData, getReportFileName())}
+                        onClick={clearAllFilters}
+                        variant="outline"
+                        className="flex items-center gap-2"
+                        disabled={Object.keys(filters).length === 0}
+                    >
+                        Сбросить фильтры
+                    </Button>
+                    <Button
+                        onClick={() => exportToExcel({
+                            ...tableData,
+                            rows: filteredRows
+                        }, getReportFileName())}
                         className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white"
                     >
                         <span className="flex"><FileUp className="w-4 mr-1"/>Экспорт в Excel</span>
@@ -286,19 +555,21 @@ export default function PreviewPage() {
                                         "cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors",
                                         isWideColumn(header)
                                             ? "max-w-[400px] min-w-[400px]"
-                                            : "max-w-[150px] min-w-[80px]"
+                                            : "max-w-[150px] min-w-[80px]",
+                                        filters[header] && "bg-blue-50 dark:bg-blue-900"
                                     )}
                                 >
                                     <div className="flex items-center justify-center gap-1">
                                         {header}
                                         <SortIcon column={header}/>
+                                        <FilterIcon column={header}/>
                                     </div>
                                 </th>
                             ))}
                         </tr>
                         </thead>
                         <tbody className="divide-y divide-border">
-                        {sortedRows.map((row, rowIndex) => (
+                        {filteredRows.map((row, rowIndex) => (
                             <tr
                                 key={rowIndex}
                                 className={cn(rowIndex % 2 === 0 ? 'bg-background' : 'bg-gray-50 dark:bg-gray-700',
@@ -378,6 +649,27 @@ export default function PreviewPage() {
                     </table>
                 </div>
             </div>
+
+            <Modal
+                isOpen={isFilterModalOpen}
+                onCloseAction={() => {
+                    setIsFilterModalOpen(false);
+                    setCurrentFilterColumn(null);
+                }}
+                title={`Фильтрация по колонке: ${currentFilterColumn || ''}`}
+                size="md"
+            >
+                {currentFilterColumn && (
+                    <FilterModalContent
+                        currentFilter={filters[currentFilterColumn]}
+                        uniqueValues={getUniqueValues(currentFilterColumn)}
+                        onApply={(condition) => applyFilter(currentFilterColumn, condition)}
+                        onClear={() => clearFilter(currentFilterColumn)}
+                        isNumeric={isNumericColumn(currentFilterColumn)}
+                        isTime={isTimeColumn(currentFilterColumn)}
+                    />
+                )}
+            </Modal>
         </div>
     );
 }
