@@ -1,7 +1,7 @@
 // src/app/preview/page.tsx
 'use client';
 
-import React, {useEffect, useMemo, useState, useRef} from 'react';
+import React, {useEffect, useMemo, useState, useRef, useCallback, JSX} from 'react';
 import {useRouter} from 'next/navigation';
 import {Button} from '@/components/UI/Button';
 import {exportToExcel} from "@/lib/excelParser";
@@ -10,6 +10,7 @@ import {formatDateTime, parseDateTime} from "@/utils";
 import {cn} from "@/utils";
 import {RowWithSapsanFlag} from "@/lib/types";
 import {Modal} from '@/components/UI/Modal';
+import LoadingSpinner from '@/components/Common/LoadingSpinner';
 
 type SortConfig = {
     key: string;
@@ -42,6 +43,8 @@ export default function PreviewPage() {
     const [filters, setFilters] = useState<FilterConfig>({});
     const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
     const [currentFilterColumn, setCurrentFilterColumn] = useState<string | null>(null);
+    const [filterLoadingColumn, setFilterLoadingColumn] = useState<string | null>(null);
+    const [isLoading, setIsLoading] = useState(false);
     const inputRef = useRef<HTMLInputElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -116,7 +119,7 @@ export default function PreviewPage() {
             }
         });
 
-        return minDate && maxDate ? { minDate, maxDate } : null;
+        return minDate && maxDate ? {minDate, maxDate} : null;
     }, [tableData]);
 
     const formatDate = (date: Date) => {
@@ -169,8 +172,10 @@ export default function PreviewPage() {
 
         return sortedRows.filter(row => {
             return Object.entries(filters).every(([column, condition]) => {
-                const cellValue = String(row[column] || '').toLowerCase();
-                const filterValue = condition.value.toLowerCase();
+                const cellValue = String(row[column] || '').toLowerCase().trim();
+                const filterValue = condition.value.toLowerCase().trim();
+
+                console.log({cellValue, filterValue});
 
                 switch (condition.type) {
                     case 'contains':
@@ -217,18 +222,30 @@ export default function PreviewPage() {
         return `Отчёт за период ${formatDate(dateRange.minDate)} - ${formatDate(dateRange.maxDate)}`;
     };
 
-    const handleSort = (key: string) => {
-        setSortConfig((prev) => ({
-            key,
-            direction: prev?.key === key && prev.direction === 'asc' ? 'desc' : 'asc'
-        }));
+    const handleSort = async (key: string) => {
+        try {
+            await new Promise(resolve => setTimeout(resolve, 300));
+            setSortConfig((prev) => ({
+                key,
+                direction: prev?.key === key && prev.direction === 'asc' ? 'desc' : 'asc'
+            }));
+        } finally {
+        }
     };
 
-    const applyFilter = (column: string, condition: FilterCondition) => {
-        setFilters(prev => ({
-            ...prev,
-            [column]: condition
-        }));
+    const applyFilter = async (column: string, condition: FilterCondition) => {
+        console.log({column, condition});
+
+        setIsLoading(true);
+        try {
+            await new Promise(resolve => setTimeout(resolve, 300));
+            setFilters(prev => ({
+                ...prev,
+                [column]: condition
+            }));
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     const clearFilter = (column: string) => {
@@ -315,48 +332,121 @@ export default function PreviewPage() {
             if (e.key === 'ArrowRight' && newCell < tableData.headers.length - 1) newCell++;
 
             if (newRow !== rowIndex || newCell !== colIndex) {
-                setEdit({ row: newRow, cell: newCell });
+                setEdit({row: newRow, cell: newCell});
             }
         }
     };
 
-    const SortIcon = ({column}: { column: string }) => {
-        if (sortConfig?.key !== column) {
-            return (
-                <span className="inline-flex items-center ml-1 text-[2em] opacity-50">
-                    <ChevronsUpDown className="w-[1em] h-[1em]"/>
-                </span>
-            );
-        }
-        return (
-            <span className="inline-flex items-center ml-1 text-[2em]">
-                {sortConfig.direction === 'asc' ?
-                    <ArrowUp className="w-[1em] h-[1em]"/>
-                    : <ArrowDown className="w-[1em] h-[1em]"/>}
-            </span>
-        );
-    };
+    const COMMON_ICON_STYLES = "inline-flex items-center py-[0.875rem] px-1 -my-3 cursor-pointer hover:text-green-400 dark:hover:text-green-800 hover:bg-gray-200 dark:hover:bg-gray-600" as const;
 
-    const FilterIcon = ({ column }: { column: string }) => {
-        const isFiltered = !!filters[column];
+    const ICON_SIZE = {
+        SORT: 16,
+        FILTER: 18,
+    } as const;
+
+    const SortIcon = ({column}: { column: string }) => {
+        const isActive = sortConfig?.key === column;
+        const [isSorting, setIsSorting] = useState(false);
+
+        const handleClick = async () => {
+            if (isLoading) return;
+            setIsSorting(true);
+            try {
+                await handleSort(column);
+            } finally {
+                setIsSorting(false);
+            }
+        };
 
         return (
             <span
-                className="inline-flex items-center ml-1 opacity-50 hover:opacity-100 cursor-pointer"
-                onClick={(e) => {
-                    e.stopPropagation();
-                    setCurrentFilterColumn(column);
-                    setIsFilterModalOpen(true);
-                }}
-                title="Фильтровать (Ctrl+Shift+L)"
+                className={`${COMMON_ICON_STYLES} text-[2em] relative ${
+                    !isActive ? "opacity-50 hover:opacity-100" : ""
+                }`}
+                onClick={handleClick}
             >
-                <Filter
-                    size={16}
-                    className={isFiltered ? "text-blue-500" : "text-current"}
-                />
-            </span>
+      {isSorting ? (
+          <LoadingSpinner small className="w-6 h-6"/>
+      ) : !isActive ? (
+          <ChevronsUpDown size={ICON_SIZE.SORT} className="w-[1em] h-[1em]"/>
+      ) : sortConfig?.direction === 'asc' ? (
+          <ArrowUp size={ICON_SIZE.SORT} className="w-[1em] h-[1em]"/>
+      ) : (
+          <ArrowDown size={ICON_SIZE.SORT} className="w-[1em] h-[1em]"/>
+      )}
+    </span>
         );
     };
+
+    interface FilterIconProps {
+        column: string;
+        isFiltered: boolean;
+        isLoading: boolean;
+        onFilterClick: (column: string) => void;
+    }
+
+    const FilterIcon = React.memo(
+        ({ column, isFiltered, isLoading, onFilterClick }: FilterIconProps) => {
+            const handleClick = useCallback((e: React.MouseEvent) => {
+                e.stopPropagation();
+                onFilterClick(column);
+            }, [onFilterClick, column]);
+
+            return (
+                <span
+                    className={`${COMMON_ICON_STYLES} relative ${
+                        isFiltered ? "text-blue-500" : "text-current opacity-50 hover:opacity-100"
+                    }`}
+                    onClick={handleClick}
+                    title="Фильтровать (Ctrl+Shift+L)"
+                >
+                {isLoading ? (
+                    <LoadingSpinner small className="w-6 h-6" />
+                ) : (
+                    <Filter size={16} className="w-[2em] h-[2em]"/>
+                )}
+            </span>
+            );
+        },
+        (prevProps, nextProps) => {
+            return prevProps.isFiltered === nextProps.isFiltered &&
+                prevProps.isLoading === nextProps.isLoading;
+        }
+    );
+
+    FilterIcon.displayName = 'FilterIcon';
+
+    const handleFilterClick = useCallback((column: string) => {
+        setFilterLoadingColumn(column);
+
+        setTimeout(() => {
+            setCurrentFilterColumn(column);
+            setIsFilterModalOpen(true);
+        }, 10);
+    }, []);
+
+    useEffect(() => {
+        if (!isFilterModalOpen && filterLoadingColumn) {
+            setFilterLoadingColumn(null);
+        }
+    }, [isFilterModalOpen]);
+
+    const filterIcons = useMemo(() => {
+        if (!tableData) return {};
+
+        return tableData.headers.reduce((acc, header) => {
+            acc[header] = (
+                <FilterIcon
+                    key={header}
+                    column={header}
+                    isFiltered={!!filters[header]}
+                    isLoading={filterLoadingColumn === header}
+                    onFilterClick={handleFilterClick}
+                />
+            );
+            return acc;
+        }, {} as Record<string, JSX.Element>);
+    }, [tableData, filters, filterLoadingColumn, handleFilterClick]);
 
     const FilterModalContent = ({
                                     currentFilter,
@@ -376,20 +466,22 @@ export default function PreviewPage() {
         const [filterType, setFilterType] = useState<FilterCondition['type']>(currentFilter?.type || 'contains');
         const [filterValue, setFilterValue] = useState(currentFilter?.value || '');
         const [selectedValues, setSelectedValues] = useState<string[]>([]);
+        const [isApplying, setIsApplying] = useState(false);
 
-        const handleApply = () => {
-            if (selectedValues.length > 0) {
-                onApply({
-                    type: 'equals',
-                    value: selectedValues.join('|')
-                });
-            } else if (filterValue.trim()) {
-                onApply({
-                    type: filterType,
-                    value: filterValue
-                });
+        const handleApply = async () => {
+            if (selectedValues.length > 0 || filterValue.trim()) {
+                setIsApplying(true);
+                console.log("selectedValues: ", selectedValues);
+                try {
+                    onApply({
+                        type: selectedValues.length > 0 ? 'equals' : filterType,
+                        value: selectedValues.length > 0 ? selectedValues.join('|') : filterValue
+                    });
+                    setIsFilterModalOpen(false);
+                } finally {
+                    setIsApplying(false);
+                }
             }
-            setIsFilterModalOpen(false);
         };
 
         const handleClear = () => {
@@ -398,16 +490,16 @@ export default function PreviewPage() {
         };
 
         const filterTypes = [
-            { value: 'contains', label: 'содержит' },
-            { value: 'equals', label: 'равно' },
-            { value: 'startsWith', label: 'начинается с' },
-            { value: 'endsWith', label: 'заканчивается на' },
+            {value: 'contains', label: 'содержит'},
+            {value: 'equals', label: 'равно'},
+            {value: 'startsWith', label: 'начинается с'},
+            {value: 'endsWith', label: 'заканчивается на'},
         ];
 
         if (isNumeric || isTime) {
             filterTypes.push(
-                { value: 'greater', label: 'больше чем' },
-                { value: 'less', label: 'меньше чем' }
+                {value: 'greater', label: 'больше чем'},
+                {value: 'less', label: 'меньше чем'}
             );
         }
 
@@ -486,9 +578,17 @@ export default function PreviewPage() {
                         </button>
                         <button
                             onClick={handleApply}
-                            className="px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                            disabled={isApplying || (!filterValue.trim() && selectedValues.length === 0)}
+                            className="px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-70 disabled:cursor-not-allowed"
                         >
-                            Применить
+                            {isApplying ? (
+                                <span className="flex items-center justify-center gap-2">
+                                    <LoadingSpinner small className="text-white"/>
+                                    Применение...
+                                </span>
+                            ) : (
+                                "Применить"
+                            )}
                         </button>
                     </div>
                 </div>
@@ -499,7 +599,7 @@ export default function PreviewPage() {
     if (!tableData) {
         return (
             <div className="flex items-center justify-center h-screen">
-                <p>Загрузка данных...</p>
+                <LoadingSpinner/>
             </div>
         );
     }
@@ -540,32 +640,44 @@ export default function PreviewPage() {
                 </div>
             </div>
 
-            <div className="flex-1 overflow-hidden">
+            <div className="flex-1 overflow-hidden relative">
+                {isLoading && (
+                    <div className="absolute inset-0 flex items-center justify-center z-20">
+                        <div className="absolute inset-0 bg-white dark:bg-gray-800 bg-opacity-30"></div>
+                        <div className="relative z-10">
+                            <LoadingSpinner/>
+                        </div>
+                    </div>
+                )}
                 <div className="h-full overflow-auto">
-                    <table className="min-w-full bg-background border border-border border-collapse border-gray-300 dark:border-gray-600">
+                    <table
+                        className="min-w-full bg-background border border-border border-collapse border-gray-300 dark:border-gray-600">
                         <thead className="bg-gray-100 dark:bg-gray-700 sticky top-0 z-10">
                         <tr>
-                            {tableData.headers.map((header, index) => (
-                                <th
-                                    key={index}
-                                    onClick={() => handleSort(header)}
-                                    className={cn(
-                                        "px-1 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase",
-                                        "tracking-wider border border-border border-gray-300 dark:border-gray-600",
-                                        "cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors",
-                                        isWideColumn(header)
-                                            ? "max-w-[400px] min-w-[400px]"
-                                            : "max-w-[150px] min-w-[80px]",
-                                        filters[header] && "bg-blue-50 dark:bg-blue-900"
-                                    )}
-                                >
-                                    <div className="flex items-center justify-center gap-1">
-                                        {header}
-                                        <SortIcon column={header}/>
-                                        <FilterIcon column={header}/>
-                                    </div>
-                                </th>
-                            ))}
+                            {tableData.headers.map((header, index) => {
+                                return (
+                                    <th
+                                        key={index}
+                                        className={cn(
+                                            "px-1 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase",
+                                            "tracking-wider border border-border border-gray-300 dark:border-gray-600",
+                                            "transition-colors",
+                                            isWideColumn(header)
+                                                ? "max-w-[400px] min-w-[400px]"
+                                                : "max-w-[220px] min-w-[80px]",
+                                            filters[header] && "bg-blue-50 dark:bg-blue-900"
+                                        )}
+                                    >
+                                        <div className="flex items-center justify-center">
+                                            {header}
+                                            <div className="flex items-center">
+                                                <SortIcon column={header}/>
+                                                {filterIcons[header]}
+                                            </div>
+                                        </div>
+                                    </th>
+                                );
+                            })}
                         </tr>
                         </thead>
                         <tbody className="divide-y divide-border">
