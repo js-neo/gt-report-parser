@@ -27,6 +27,7 @@ const minRateMSK = {
 };
 
 export default function Home() {
+    const [excelData, setExcelData] = useState<ExcelData | null>(null);
     const [excelDataSPB, setExcelDataSPB] = useState<ExcelData | null>(null);
     const [partnerDataSPB, setPartnerDataSPB] = useState<ExcelData | null>(null);
     const [excelDataMoscow, setExcelDataMoscow] = useState<ExcelData | null>(null);
@@ -45,7 +46,8 @@ export default function Home() {
         const savedPreviewData = sessionStorage.getItem('savedPreviewData');
         if (savedPreviewData) {
             const parsedData = JSON.parse(savedPreviewData);
-            setExcelDataSPB({
+            console.log("parsedData: ", parsedData);
+            setExcelData({
                 headers: parsedData.headers,
                 rows: parsedData.rows
             });
@@ -54,6 +56,8 @@ export default function Home() {
                 name: header,
                 visible: true
             })));
+            sessionStorage.removeItem('processedData');
+            sessionStorage.setItem('processedData', JSON.stringify(parsedData));
             sessionStorage.removeItem('savedPreviewData');
         }
     }, []);
@@ -387,9 +391,6 @@ export default function Home() {
                 }
             }
 
-            /*console.log(`!processedRow[executorColumnKey] заказ ${processedRow['Номер заказа']}: `, executorColumnKey &&
-            typeof processedRow[executorColumnKey] === 'string' ?
-                processedRow[executorColumnKey].length : "Нет колонки Исполнитель");*/
             if (commentColumnKey && executorColumnKey) {
 
                 const executorValue = String(processedRow[executorColumnKey] || '').trim();
@@ -524,7 +525,7 @@ export default function Home() {
 
 
     const handleProcess = async () => {
-        const data = isSLVMode ? combineData() : excelDataSPB;
+        const data = isSLVMode ? combineData() || excelData : excelDataSPB;
         if (!data) return;
 
         setIsProcessing(true);
@@ -546,7 +547,7 @@ export default function Home() {
 
             clearInterval(interval);
             setProgress(100);
-            router.push('/preview');
+            router.push('/process');
         } catch (error) {
             console.error('Processing error:', error);
             setIsProcessing(false);
@@ -554,7 +555,7 @@ export default function Home() {
     };
 
     const handlePreview = () => {
-        const data = isSLVMode ? combineData() : excelDataSPB;
+        const data = isSLVMode ? combineData() || excelData : excelDataSPB;
         if (!data) return;
 
         processAndSaveData(columns, data);
@@ -563,6 +564,7 @@ export default function Home() {
 
     const allFilesUploaded = () => {
         if (!isSLVMode) return !!excelDataSPB;
+        if (!!excelData) return !!excelData;
         return !!excelDataSPB && !!partnerDataSPB && !!excelDataMoscow && !!partnerDataMoscow;
     }
 
