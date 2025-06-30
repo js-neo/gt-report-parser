@@ -416,21 +416,21 @@ export default function Home() {
                         return yandexPatterns.some(pattern => pattern.test(comment));
                     };
 
-                    const viliPatterns = [
+                    const villiPatterns = [
                         /влад\d{3}$/i, /\/в$/i, /в$/i, /\/в\s*$/i, /\dв\d{3}$/i, /\d\/в/i, /\dв$/i,
                     ];
 
-                    const isVili = (comment: string): boolean => {
+                    const isVilli = (comment: string): boolean => {
                         const exceptionRegs = [/ов$/];
                         const isException = exceptionRegs.some(reg => reg.test(comment));
                         if (isException) return false;
-                        return viliPatterns.some(pattern => pattern.test(comment));
+                        return villiPatterns.some(pattern => pattern.test(comment));
                     };
 
                     const executorPatterns = [
                         {test: isAsonov, value: 'Асонов'},
                         {test: isYandex, value: 'Яндекс'},
-                        {test: isVili, value: 'Вили'},
+                        {test: isVilli, value: 'Вилли'},
                     ];
 
                     const executor = executorPatterns.find(({test}) => test(comment))?.value;

@@ -14,12 +14,25 @@ interface ProcessedRow extends Record<string, string | number | Date | null> {
     _parkPartner: string;
 }
 
+interface GroupData {
+    headers: string[];
+    rows: ProcessedRow[];
+    cities: Record<string, number>;
+    city?: 'spb' | 'msk';
+}
+
 const ProcessPage = () => {
     const [excelData, setExcelData] = useState<ExcelData | null>(null);
     const [isProcessing, setIsProcessing] = useState(false);
 
+    const COMMISSION_RATES = {
+        SPB: 0.23,
+        MSK: 0.27,
+        DEFAULT: 0
+    } as const;
+
     const slvProcessTableHeaders = [
-        'Номер заказа', 'Время заказа', 'Стоимость', 'Комиссия 27%',
+        'Номер заказа', 'Время заказа', 'Стоимость', 'Комиссия',
         'Доплата', 'К выплате', 'Адрес', 'Исполнитель', 'Автомобиль', 'Комментарий'
     ];
 
@@ -28,6 +41,8 @@ const ProcessPage = () => {
         { key: 'Время заказа', width: 230 },
         { key: 'Стоимость', width: 160 },
         { key: 'Комиссия 27%', width: 160 },
+        { key: 'Комиссия 23%', width: 160 },
+        { key: 'Комиссия', width: 160 },
         { key: 'Доплата', width: 160 },
         { key: 'К выплате', width: 160 },
         { key: 'Адрес', width: 680 },
@@ -36,7 +51,7 @@ const ProcessPage = () => {
         { key: 'Комментарий', width: 680 },
     ];
 
-    const numericColumns = ['Стоимость', 'Комиссия 27%', 'Доплата', 'К выплате'];
+    const numericColumns = ['Стоимость', 'Комиссия', 'Доплата', 'К выплате'];
 
     const isNumericColumn = (header: string) => {
         return numericColumns.some(numericHeader =>
@@ -48,22 +63,20 @@ const ProcessPage = () => {
         headers.forEach((header, index) => {
             const widthConfig = widthColumns.find(w => header.includes(w.key));
             worksheet.getColumn(index + 1).width = widthConfig ? widthConfig.width / 12 : 20;
+            console.log(`isNumericColumn(${header}): `, isNumericColumn(header))
             if (isNumericColumn(header)) {
                 worksheet.getColumn(index + 1).numFmt = '#,##0.00';
+                console.log(`worksheet.getColumn(${index + 1}): `, worksheet.getColumn(index + 1));
+                console.log(`worksheet.getColumn(${index + 1}).numFmt: `, worksheet.getColumn(index + 1).numFmt);
             }
         });
 
         const headerRow = worksheet.getRow(1);
         headerRow.eachCell((cell) => {
-            cell.fill = {
-                type: 'pattern',
-                pattern: 'solid',
-                fgColor: {argb: 'FFE6FFE6'}
-            };
             cell.font = {
                 bold: true,
-                size: 12,
-                name: 'Arial'
+                size: 10,
+                name: 'Calibri'
             };
             cell.alignment = {
                 vertical: 'middle',
@@ -80,21 +93,18 @@ const ProcessPage = () => {
 
         worksheet.eachRow((row: ExcelJS.Row, rowNumber) => {
             if (rowNumber === 1) return;
-            const isEvenRow = rowNumber % 2 === 0;
-            const rowFillColor = isEvenRow ? 'FFF2F2F2' : 'FFFFFFFF';
 
             row.eachCell((cell, colNumber) => {
                 const header = headers[colNumber - 1];
 
                 if (cell.value === null || cell.value === undefined || cell.value === '' ||
                     (typeof cell.value === 'string' && cell.value.trim() === '')) {
-                    cell.value = isNumericColumn(header) ? 0 : '-';
+                    cell.value = isNumericColumn(header) ? 0 : '';
                 }
 
-                cell.fill = {
-                    type: 'pattern',
-                    pattern: 'solid',
-                    fgColor: {argb: rowFillColor}
+                cell.font = {
+                    size: 10,
+                    name: 'Calibri'
                 };
                 cell.alignment = {
                     vertical: 'middle',
@@ -126,6 +136,14 @@ const ProcessPage = () => {
         return header.toLowerCase().includes('время');
     };
 
+    const getCityFromAddress = (address: string): 'spb' | 'msk' | null => {
+        if (!address) return null;
+        const addressLower = address.toLowerCase();
+        if (addressLower.includes('москва')) return 'msk';
+        if (addressLower.includes('санкт-петербург') || addressLower.includes('спб')) return 'spb';
+        return null;
+    };
+
     const processData = (data: ExcelData): { headers: string[]; rows: ProcessedRow[] } => {
         const headerMap: Record<string, string> = {};
 
@@ -141,12 +159,21 @@ const ProcessPage = () => {
             }
         });
 
+        const addressColumnKey = data.headers.find(h =>
+            h.toLowerCase().includes('адрес'));
         const parkPartnerHeader = data.headers.find(h =>
             h.toLowerCase().includes('парк партнёр')
         );
 
         const processedRows: ProcessedRow[] = data.rows.map(row => {
             const newRow: Record<string, string | number | Date | null> = {};
+
+            const address = addressColumnKey ? String(row[addressColumnKey] || '') : '';
+            const city = getCityFromAddress(address);
+            const percentCity = city == 'spb'
+                ? COMMISSION_RATES.SPB : city === 'msk'
+                ? COMMISSION_RATES.MSK : COMMISSION_RATES.DEFAULT;
+
 
             Object.entries(headerMap).forEach(([targetHeader, sourceHeader]) => {
                 const value = row[sourceHeader];
@@ -162,15 +189,19 @@ const ProcessPage = () => {
 
             const cost = Number(newRow['Стоимость']) || 0;
             const extraPayment = Number(newRow['Доплата']) || 0;
+            const costPercentCity = parseFloat((cost * percentCity).toFixed(2));
 
-            newRow['Комиссия 27%'] = cost * 0.27;
-            newRow['К выплате'] = (cost - (cost * 0.27)) + extraPayment;
+            newRow['Стоимость'] = Number(newRow['Стоимость']);
+            newRow['Комиссия'] = costPercentCity;
+            newRow['Доплата'] = Number(newRow['Доплата'])
+            newRow['К выплате'] = Number((cost - costPercentCity) + extraPayment);
 
             const parkPartnerValue = parkPartnerHeader ? row[parkPartnerHeader] : null;
 
             return {
                 ...newRow,
-                _parkPartner: parkPartnerValue ? String(parkPartnerValue) : 'без парка'
+                _parkPartner: String(parkPartnerValue).trim() && (String(parkPartnerValue).trim() !== '-')
+                    ? String(parkPartnerValue).trim() : 'без парка'
             } as ProcessedRow;
         });
 
@@ -239,21 +270,60 @@ const ProcessPage = () => {
 
         setIsProcessing(true);
         try {
-            const groups: Record<string, { headers: string[]; rows: ProcessedRow[] }> = {};
+            const groups: Record<string, GroupData> = {};
 
             processedData.rows.forEach(row => {
                 const park = row._parkPartner;
+                const address = row['Адрес'] as string;
+                const city = getCityFromAddress(address);
 
                 if (!groups[park]) {
                     groups[park] = {
-                        headers: processedData.headers,
-                        rows: []
+                        headers: [...processedData.headers],
+                        rows: [],
+                        cities: {}
                     };
+                }
+
+                if (city) {
+                    groups[park].cities[city] = (groups[park].cities[city] || 0) + 1;
                 }
 
                 // eslint-disable-next-line @typescript-eslint/no-unused-vars
                 const { _parkPartner, ...cleanRow } = row;
                 groups[park].rows.push(cleanRow as ProcessedRow);
+            });
+
+            Object.values(groups).forEach(group => {
+                const cities = Object.entries(group.cities);
+                const hasMixedCities = cities.length > 1;
+
+                if (!hasMixedCities && cities.length > 0) {
+                    const [mainCity] = cities[0];
+                    group.city = mainCity as 'spb' | 'msk';
+                }
+
+                const commissionIndex = group.headers.findIndex(h => h.includes('Комиссия'));
+
+                if (commissionIndex !== -1) {
+                    const newHeader = hasMixedCities
+                        ? 'Комиссия'
+                        : group.city
+                            ? `Комиссия ${group.city === 'spb' ? '23%' : '27%'}`
+                            : 'Комиссия';
+
+                    if (group.headers[commissionIndex] !== newHeader) {
+                        const oldHeader = group.headers[commissionIndex];
+
+                        group.headers[commissionIndex] = newHeader;
+                        group.rows.forEach(row => {
+                            if (oldHeader in row) {
+                                row[newHeader] = row[oldHeader];
+                                delete row[oldHeader];
+                            }
+                        });
+                    }
+                }
             });
 
             const zip = new JSZip();
@@ -262,11 +332,25 @@ const ProcessPage = () => {
                 : 'отчёты';
 
             for (const [park, data] of Object.entries(groups)) {
-                const fileName = dateRange
-                    ? `отчёт_за_период_${formatDate(dateRange.minDate)}_${formatDate(dateRange.maxDate)}_по_${park}`
-                    : `отчёт_по_${park}`;
+                console.log('park: ', park);
+                console.log('park.length: ', park.length);
+                const processedPark = park.toLowerCase()
+                    .replace(/\s+/g, '_')
+                    .replace(/["'`´‘’“”]/g, '_')
+                    .replace(/[\\/*?:[\]]/g, '_')
+                    .replace(/_+/g, '_')
+                    .replace(/^[-_]|[-_]$/g, '');
 
-                const safeFileName = fileName.replace(/[\\/*?:[\]]/g, '_');
+                const fileName = dateRange
+                    ? `отчёт_за_период_${formatDate(dateRange.minDate)}_${formatDate(dateRange.maxDate)}_по_${processedPark}`
+                    : `отчёт_по_${processedPark}`;
+
+                const safeFileName = fileName.toLowerCase()
+                    .replace(/\s+/g, '_')
+                    .replace(/["'`´‘’“”]/g, '_')
+                    .replace(/[\\/*?:[\]]/g, '_')
+                    .replace(/_+/g, '_')
+                    .replace(/^[-_]|[-_]$/g, '') ;
                 const fileBlob = await createExcelFile(data);
                 zip.file(`${safeFileName}.xlsx`, fileBlob);
             }
@@ -341,7 +425,6 @@ const ProcessPage = () => {
                         {excelData && processData(excelData).rows.map((row, rowIndex) => (
                             <tr
                                 key={rowIndex}
-                                className={rowIndex % 2 === 0 ? 'bg-background' : 'bg-gray-50 dark:bg-gray-700'}
                             >
                                 {slvProcessTableHeaders.map((header, colIndex) => {
                                     const isWide = header.toLowerCase().includes('адрес') ||
@@ -356,11 +439,11 @@ const ProcessPage = () => {
                                                     "max-w-[150px] min-w-[80px] break-words whitespace-normal"
                                             )}
                                         >
-                                            {header === 'Комиссия 27%' ?
-                                                (row['Комиссия 27%'] as number).toFixed(2) :
-                                                header === 'К выплате' ?
-                                                    (row['К выплате'] as number).toFixed(2) :
-                                                    String(row[header] || '')}
+                                            {
+                                                isNumericColumn(header) ?
+                                                    (Number(row[header]) || 0).toFixed(2) :
+                                                    String(row[header] || '')
+                                            }
                                         </td>
                                     );
                                 })}

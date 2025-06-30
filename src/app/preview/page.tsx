@@ -678,8 +678,7 @@ export default function PreviewPage() {
                         {filteredRows.map((row, rowIndex) => (
                             <tr
                                 key={rowIndex}
-                                className={cn(rowIndex % 2 === 0 ? 'bg-background' : 'bg-gray-50 dark:bg-gray-700',
-                                    row._isSapsan && 'bg-green-100 dark:bg-green-900',
+                                className={cn(row._isSapsan && 'bg-green-100 dark:bg-green-900',
                                     row._isValueError && 'bg-red-100 dark:bg-red-900')}
                             >
                                 {tableData.headers.map((header, colIndex) => (
@@ -745,8 +744,10 @@ export default function PreviewPage() {
                                         ) : (
                                             isTimeColumn(header) && typeof row[header] === 'string' && row[header].toString().includes('T')
                                                 ? formatDateTime(new Date(row[header] as string))
-                                                : String(row[header] || ''))
-                                        }
+                                                : isNumericColumn(header) ?
+                                                    (Number(row[header]) || 0).toFixed(2) :
+                                                    String(row[header] || '')
+                                        )}
                                     </td>
                                 ))}
                             </tr>

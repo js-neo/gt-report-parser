@@ -41,20 +41,17 @@ const applyWorksheetFormatting = (worksheet: ExcelJS.Worksheet, headers: string[
         worksheet.getColumn(index + 1).width = widthConfig ? widthConfig.width / 12 : 20;
         if (isNumericColumn(header)) {
             worksheet.getColumn(index + 1).numFmt = '#,##0.00';
+            console.log(`worksheet.getColumn(${index + 1}): `, worksheet.getColumn(index + 1));
+            console.log(`worksheet.getColumn(${index + 1}).numFmt: `, worksheet.getColumn(index + 1).numFmt);
         }
     });
 
     const headerRow = worksheet.getRow(1);
     headerRow.eachCell((cell) => {
-        cell.fill = {
-            type: 'pattern',
-            pattern: 'solid',
-            fgColor: {argb: 'FFE6FFE6'}
-        };
         cell.font = {
             bold: true,
-            size: 12,
-            name: 'Arial'
+            size: 10,
+            name: 'Calibri'
         };
         cell.alignment = {
             vertical: 'middle',
@@ -71,26 +68,28 @@ const applyWorksheetFormatting = (worksheet: ExcelJS.Worksheet, headers: string[
 
     worksheet.eachRow((row: Row, rowNumber) => {
         if (rowNumber === 1) return;
-        const isEvenRow = rowNumber % 2 === 0;
         const isSapsan = row._isSapsan === true;
         const isValueError = row._isValueError === true;
         const rowFillColor = isValueError ?
             'FFFFCCCC' : isSapsan ?
-            'FFE6FFE6' : isEvenRow ?
-                    'FFF2F2F2' : 'FFFFFFFF';
+            'FFE6FFE6' : 'FFFFFFFF';
 
         row.eachCell((cell, colNumber) => {
             const header = headers[colNumber - 1];
 
             if (cell.value === null || cell.value === undefined || cell.value === '' ||
                 (typeof cell.value === 'string' && cell.value.trim() === '')) {
-                cell.value = isNumericColumn(header) ? 0 : '-';
+                cell.value = isNumericColumn(header) ? 0 : '';
             }
 
             cell.fill = {
                 type: 'pattern',
                 pattern: 'solid',
                 fgColor: {argb: rowFillColor}
+            };
+            cell.font = {
+                size: 10,
+                name: 'Calibri'
             };
             cell.alignment = {
                 vertical: 'middle',
@@ -152,9 +151,7 @@ export const parseCSVFile = async (file: File): Promise<ExcelData> => {
                                 try {
 
                                     if (isTimeColumn[index] && row[header]) {
-
                                         const dateValue = parseDateTime(String(row[header]));
-
                                         processedRow[header] = !isNaN(dateValue.getTime()) && row[header];
 
                                     } else {
@@ -294,10 +291,14 @@ export const exportToExcel = async (data: ProcessedData, fileName: string) => {
             let value = row[header];
             if (value === null || value === undefined || value === '' ||
                 (typeof value === 'string' && value.trim() === '')) {
-                value = isNumericColumn(header) ? 0 : '-';
+                value = isNumericColumn(header) ? 0 : '';
             }
             if (isTimeColumn[index] && value instanceof Date) {
                 return adjustForMoscowTime(value);
+            }
+            if (isNumericColumn(header)) {
+                const numValue = Number(value);
+                return isNaN(numValue) ? 0 : numValue;
             }
 
             return value;
