@@ -6,7 +6,7 @@ import {useRouter} from 'next/navigation';
 import {Button} from '@/components/UI/Button';
 import {exportToExcel} from "@/lib/excelParser";
 import {FileUp, ArrowUp, ArrowDown, ChevronsUpDown, Filter} from 'lucide-react';
-import {formatDateTime, parseDateTime} from "@/utils";
+import {formatDate, formatDateTime, parseDateTime} from "@/utils";
 import {cn} from "@/utils";
 import {RowWithSapsanFlag} from "@/lib/types";
 import {Modal} from '@/components/UI/Modal';
@@ -121,12 +121,6 @@ export default function PreviewPage() {
 
         return minDate && maxDate ? {minDate, maxDate} : null;
     }, [tableData]);
-
-    const formatDate = (date: Date) => {
-        const day = String(date.getDate()).padStart(2, '0');
-        const month = String(date.getMonth() + 1).padStart(2, '0');
-        return `${day}.${month}.${date.getFullYear()}`;
-    };
 
     const getUniqueValues = (column: string) => {
         if (!tableData) return [];

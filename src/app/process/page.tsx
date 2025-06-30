@@ -126,35 +126,6 @@ const ProcessPage = () => {
         return header.toLowerCase().includes('время');
     };
 
-    const dateRange = useMemo(() => {
-        if (!excelData) return null;
-
-        let minDate: Date | null = null;
-        let maxDate: Date | null = null;
-
-        excelData.headers.forEach((header) => {
-            if (isTimeColumn(header)) {
-                excelData.rows.forEach(row => {
-                    const value = row[header];
-                    if (!value) return;
-
-                    const date = parseDateTime(value);
-                    if (isNaN(date.getTime())) return;
-
-                    if (!minDate || date < minDate) minDate = date;
-                    if (!maxDate || date > maxDate) maxDate = date;
-                });
-            }
-        });
-
-        return minDate && maxDate ? {minDate, maxDate} : null;
-    }, [excelData]);
-
-    const getReportPeriodTitle = () => {
-        if (!dateRange) return 'Нет информации о периоде';
-        return `Отчёт за период ${formatDate(dateRange.minDate)} - ${formatDate(dateRange.maxDate)}`;
-    };
-
     const processData = (data: ExcelData): { headers: string[]; rows: ProcessedRow[] } => {
         const headerMap: Record<string, string> = {};
 
@@ -208,56 +179,38 @@ const ProcessPage = () => {
             rows: processedRows
         };
     };
-if (excelData) {
-    console.log("processData(): ", processData(excelData));
-}
+    const processedData = excelData ? processData(excelData) : null;
+    console.log("processedData: ", processedData);
 
-
-    const getDateRange = (data: ExcelData) => {
-        const timeHeader = data.headers.find(h =>
-            h.toLowerCase().includes('время заказа')
-        );
-
-        if (!timeHeader) return null;
+    const dateRange = useMemo(() => {
+        if (!processedData) return null;
 
         let minDate: Date | null = null;
         let maxDate: Date | null = null;
 
-        data.rows.forEach(row => {
-            const dateValue = row[timeHeader];
-            if (dateValue === null || dateValue === undefined) return;
+        processedData.headers.forEach((header) => {
+            if (isTimeColumn(header)) {
+                processedData.rows.forEach(row => {
+                    const value = row[header];
+                    if (!value) return;
 
-            try {
-                let date: Date;
-                if (dateValue instanceof Date) {
-                    date = dateValue;
-                } else if (typeof dateValue === 'string') {
-                    date = new Date(dateValue);
-                } else if (typeof dateValue === 'number') {
-                    date = new Date(dateValue);
-                } else {
-                    return;
-                }
+                    const date = parseDateTime(value);
+                    if (isNaN(date.getTime())) return;
 
-                if (isNaN(date.getTime())) return;
-
-                if (!minDate || date < minDate) minDate = date;
-                if (!maxDate || date > maxDate) maxDate = date;
-            } catch (error) {
-                console.warn('Invalid date format', dateValue);
-                console.log('Error: ', error);
+                    if (!minDate || date < minDate) minDate = date;
+                    if (!maxDate || date > maxDate) maxDate = date;
+                });
             }
         });
 
-        return minDate && maxDate ? { minDate, maxDate } : null;
+        return minDate && maxDate ? {minDate, maxDate} : null;
+    }, [processedData]);
+
+    const getReportPeriodTitle = () => {
+        if (!dateRange) return 'Нет информации о периоде';
+        return `Отчёт за период ${formatDate(dateRange.minDate)} - ${formatDate(dateRange.maxDate)}`;
     };
 
-    const formatDateForFilename = (date: Date): string => {
-        const day = String(date.getDate()).padStart(2, '0');
-        const month = String(date.getMonth() + 1).padStart(2, '0');
-        const year = date.getFullYear();
-        return `${day}.${month}.${year}`;
-    };
 
     const createExcelFile = async (data: { headers: string[]; rows: ProcessedRow[] }): Promise<Blob> => {
         const workbook = new ExcelJS.Workbook();
@@ -282,13 +235,10 @@ if (excelData) {
     };
 
     const handleExport = async () => {
-        if (!excelData) return;
+        if (!processedData) return;
 
         setIsProcessing(true);
         try {
-            const processedData = processData(excelData);
-            const dateRange = getDateRange(excelData) || getDateRange(processedData);
-
             const groups: Record<string, { headers: string[]; rows: ProcessedRow[] }> = {};
 
             processedData.rows.forEach(row => {
@@ -308,12 +258,12 @@ if (excelData) {
 
             const zip = new JSZip();
             const baseName = dateRange
-                ? `отчёты_по_паркам_за_период_${formatDateForFilename(dateRange.minDate)}_${formatDateForFilename(dateRange.maxDate)}`
+                ? `отчёты_по_паркам_за_период_${formatDate(dateRange.minDate)}_${formatDate(dateRange.maxDate)}`
                 : 'отчёты';
 
             for (const [park, data] of Object.entries(groups)) {
                 const fileName = dateRange
-                    ? `отчёт_за_период_${formatDateForFilename(dateRange.minDate)}_${formatDateForFilename(dateRange.maxDate)}_по_${park}`
+                    ? `отчёт_за_период_${formatDate(dateRange.minDate)}_${formatDate(dateRange.maxDate)}_по_${park}`
                     : `отчёт_по_${park}`;
 
                 const safeFileName = fileName.replace(/[\\/*?:[\]]/g, '_');
