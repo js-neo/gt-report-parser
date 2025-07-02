@@ -73,6 +73,20 @@ const ProcessPage = () => {
         );
     };
 
+    function getColumnLetter(columnIndex: number): string {
+        let letter = '';
+        while (columnIndex >= 0) {
+            letter = String.fromCharCode(65 + (columnIndex % 26)) + letter;
+            columnIndex = Math.floor(columnIndex / 26) - 1;
+        }
+        return letter;
+    }
+
+    const getCityForRow = (row: ProcessedRow): 'spb' | 'msk' | null => {
+        const address = row['Адрес'] as string;
+        return getCityFromAddress(address);
+    };
+
     const applyWorksheetFormatting = (worksheet: ExcelJS.Worksheet, headers: string[]) => {
         headers.forEach((header, index) => {
             const widthConfig = widthColumns.find(w => header.includes(w.key));
@@ -85,6 +99,76 @@ const ProcessPage = () => {
                 worksheet.getColumn(index + 1).numFmt = '0';
             }
         });
+
+        worksheet.eachRow((row, rowNumber) => {
+            if (rowNumber === 1) return; // Пропускаем заголовок
+
+            const rowData = row.values as Array<string | number | Date | null>;
+            const processedRow: Partial<ProcessedRow> = {};
+            headers.forEach((header, idx) => {
+                processedRow[header] = rowData[idx + 1];
+            });
+
+            const city = getCityForRow(processedRow as ProcessedRow);
+            const percentCity = city === 'spb'
+                ? COMMISSION_RATES.SPB
+                : city === 'msk'
+                    ? COMMISSION_RATES.MSK
+                    : COMMISSION_RATES.DEFAULT;
+
+
+            const commissionColIndex = headers.findIndex(h => h === 'Комиссия');
+            console.log("commissionColIndex: ", commissionColIndex);
+            console.log("getColumnLetter(commissionColIndex): ", getColumnLetter(commissionColIndex));
+
+            if (commissionColIndex > 0) {
+                const costColLetter = getColumnLetter(headers.findIndex(h => h === 'Стоимость'));
+                console.log("costColLetter: ", costColLetter);
+                row.getCell(commissionColIndex + 1).value = {
+                    formula: `${costColLetter}${rowNumber} * ${percentCity}`
+                };
+            }
+
+
+            const payoutColIndex = headers.findIndex(h => h === 'К выплате');
+            console.log("payoutColIndex: ", payoutColIndex);
+            console.log("getColumnLetter(payoutColIndex): ", getColumnLetter(payoutColIndex));
+
+            if (payoutColIndex > 0) {
+                const costColLetter = getColumnLetter(headers.findIndex(h => h === 'Стоимость'));
+                console.log("costColLetter_2: ", costColLetter);
+                const extraPayColLetter = getColumnLetter(headers.findIndex(h => h === 'Доплата'));
+                console.log("extraPayColLetter: ", extraPayColLetter);
+                console.log("payoutColIndex_2: ", payoutColIndex);
+                row.getCell(payoutColIndex + 1).value = {
+                    formula: `(${costColLetter}${rowNumber} - (${costColLetter}${rowNumber} * ${percentCity})) + ${extraPayColLetter}${rowNumber}`
+                };
+            }
+        });
+
+
+        const lastDataRow = worksheet.rowCount;
+        const totalRow = worksheet.addRow(['', '', '', '', '', '']);
+
+
+        totalRow.eachCell((cell) => {
+            cell.font = { bold: true };
+            cell.border = {
+                top: {style: 'thin'},
+                left: {style: 'thin'},
+                bottom: {style: 'thin'},
+                right: {style: 'thin'}
+            };
+        });
+
+
+        const payoutColIndex = headers.findIndex(h => h === 'К выплате');
+        if (payoutColIndex > 0) {
+            const payoutColLetter = getColumnLetter(payoutColIndex);
+            totalRow.getCell(payoutColIndex + 1).value = {
+                formula: `SUM(${payoutColLetter}2:${payoutColLetter}${lastDataRow})`
+            };
+        }
 
         const headerRow = worksheet.getRow(1);
         headerRow.eachCell((cell) => {
