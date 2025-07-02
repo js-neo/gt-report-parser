@@ -2,9 +2,9 @@
 
 'use client'
 import React, {useEffect, useMemo, useState} from 'react';
-import { ExcelData } from "@/lib/types";
+import {ExcelData} from "@/lib/types";
 import JSZip from 'jszip';
-import { saveAs } from 'file-saver';
+import {saveAs} from 'file-saver';
 import * as ExcelJS from 'exceljs';
 import {cn, formatDate, parseDateTime} from "@/utils";
 import {FileUp} from "lucide-react";
@@ -37,23 +37,37 @@ const ProcessPage = () => {
     ];
 
     const widthColumns = [
-        { key: 'Номер заказа', width: 130 },
-        { key: 'Время заказа', width: 230 },
-        { key: 'Стоимость', width: 160 },
-        { key: 'Комиссия 27%', width: 160 },
-        { key: 'Комиссия 23%', width: 160 },
-        { key: 'Комиссия', width: 160 },
-        { key: 'Доплата', width: 160 },
-        { key: 'К выплате', width: 160 },
-        { key: 'Адрес', width: 680 },
-        { key: 'Исполнитель', width: 270 },
-        { key: 'Автомобиль', width: 270 },
-        { key: 'Комментарий', width: 680 },
+        {key: 'Номер заказа', width: 130},
+        {key: 'Время заказа', width: 230},
+        {key: 'Стоимость', width: 160},
+        {key: 'Комиссия 27%', width: 160},
+        {key: 'Комиссия 23%', width: 160},
+        {key: 'Комиссия', width: 160},
+        {key: 'Доплата', width: 160},
+        {key: 'К выплате', width: 160},
+        {key: 'Адрес', width: 680},
+        {key: 'Исполнитель', width: 270},
+        {key: 'Автомобиль', width: 270},
+        {key: 'Комментарий', width: 680},
     ];
 
-    const numericColumns = ['Стоимость', 'Комиссия', 'Доплата', 'К выплате'];
+    const numericColumns = ['Номер заказа'];
+    const dateColumns = ['Время заказа'];
+    const financialColumns = ['Стоимость', 'Комиссия', 'Доплата', 'К выплате'];
 
-    const isNumericColumn = (header: string) => {
+    const isFinancialColumns = (header: string) => {
+        return financialColumns.some(financialHeader =>
+            header.toLowerCase().includes(financialHeader.toLowerCase())
+        );
+    };
+
+    const isDateColumns = (header: string) => {
+        return dateColumns.some(dateHeader =>
+            header.toLowerCase().includes(dateHeader.toLowerCase())
+        );
+    };
+
+    const isNumericColumns = (header: string) => {
         return numericColumns.some(numericHeader =>
             header.toLowerCase().includes(numericHeader.toLowerCase())
         );
@@ -63,11 +77,12 @@ const ProcessPage = () => {
         headers.forEach((header, index) => {
             const widthConfig = widthColumns.find(w => header.includes(w.key));
             worksheet.getColumn(index + 1).width = widthConfig ? widthConfig.width / 12 : 20;
-            console.log(`isNumericColumn(${header}): `, isNumericColumn(header))
-            if (isNumericColumn(header)) {
+            if (isFinancialColumns(header)) {
                 worksheet.getColumn(index + 1).numFmt = '#,##0.00';
-                console.log(`worksheet.getColumn(${index + 1}): `, worksheet.getColumn(index + 1));
-                console.log(`worksheet.getColumn(${index + 1}).numFmt: `, worksheet.getColumn(index + 1).numFmt);
+            } else if (isDateColumns(header)) {
+                worksheet.getColumn(index + 1).numFmt = 'DD.MM.YYYY HH:mm';
+            } else if (isNumericColumns(header)) {
+                worksheet.getColumn(index + 1).numFmt = '0';
             }
         });
 
@@ -99,7 +114,7 @@ const ProcessPage = () => {
 
                 if (cell.value === null || cell.value === undefined || cell.value === '' ||
                     (typeof cell.value === 'string' && cell.value.trim() === '')) {
-                    cell.value = isNumericColumn(header) ? 0 : '';
+                    cell.value = isFinancialColumns(header) ? 0 : '';
                 }
 
                 cell.font = {
@@ -172,7 +187,7 @@ const ProcessPage = () => {
             const city = getCityFromAddress(address);
             const percentCity = city == 'spb'
                 ? COMMISSION_RATES.SPB : city === 'msk'
-                ? COMMISSION_RATES.MSK : COMMISSION_RATES.DEFAULT;
+                    ? COMMISSION_RATES.MSK : COMMISSION_RATES.DEFAULT;
 
 
             Object.entries(headerMap).forEach(([targetHeader, sourceHeader]) => {
@@ -195,6 +210,7 @@ const ProcessPage = () => {
             newRow['Комиссия'] = costPercentCity;
             newRow['Доплата'] = Number(newRow['Доплата'])
             newRow['К выплате'] = Number((cost - costPercentCity) + extraPayment);
+            newRow['Номер заказа'] = Number(newRow['Номер заказа']);
 
             const parkPartnerValue = parkPartnerHeader ? row[parkPartnerHeader] : null;
 
@@ -265,6 +281,24 @@ const ProcessPage = () => {
         });
     };
 
+    const handleExportGeneral = async () => {
+        if (!processedData) return;
+
+        setIsProcessing(true);
+        try {
+            const blob = await createExcelFile(processedData);
+            const fileName = dateRange
+                ? `отчёт_по_паркам_за_период_${formatDate(dateRange.minDate)}_${formatDate(dateRange.maxDate)}.xlsx`
+                : 'общий_отчёт.xlsx';
+            saveAs(blob, fileName);
+        } catch (error) {
+            console.error('Export error:', error);
+            alert('Произошла ошибка при экспорте данных');
+        } finally {
+            setIsProcessing(false);
+        }
+    };
+
     const handleExport = async () => {
         if (!processedData) return;
 
@@ -290,7 +324,7 @@ const ProcessPage = () => {
                 }
 
                 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-                const { _parkPartner, ...cleanRow } = row;
+                const {_parkPartner, ...cleanRow} = row;
                 groups[park].rows.push(cleanRow as ProcessedRow);
             });
 
@@ -350,12 +384,12 @@ const ProcessPage = () => {
                     .replace(/["'`´‘’“”]/g, '_')
                     .replace(/[\\/*?:[\]]/g, '_')
                     .replace(/_+/g, '_')
-                    .replace(/^[-_]|[-_]$/g, '') ;
+                    .replace(/^[-_]|[-_]$/g, '');
                 const fileBlob = await createExcelFile(data);
                 zip.file(`${safeFileName}.xlsx`, fileBlob);
             }
 
-            const zipBlob = await zip.generateAsync({ type: 'blob' });
+            const zipBlob = await zip.generateAsync({type: 'blob'});
             saveAs(zipBlob, `${baseName}.zip`);
 
         } catch (error) {
@@ -386,18 +420,32 @@ const ProcessPage = () => {
                 </div>
                 <div className="flex gap-2">
                     <Button
+                        onClick={handleExportGeneral}
+                        disabled={isProcessing}
+                        className="flex items-center gap-2 bg-green-500 hover:bg-green-600 text-white"
+                    >
+            <span className="flex">
+                <FileUp className="w-4 mr-1"/>
+                {isProcessing ? 'Идет экспорт...' : 'Экспортировать в Excel'}
+            </span>
+                    </Button>
+                    <Button
                         onClick={handleExport}
                         disabled={isProcessing}
                         className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white"
                     >
-                        <span className="flex"><FileUp className="w-4 mr-1"/>{isProcessing ? 'Идет экспорт...' : 'Экспортировать в Excel по паркам'}</span>
+            <span className="flex">
+                <FileUp className="w-4 mr-1"/>
+                {isProcessing ? 'Идет экспорт...' : 'Экспортировать в Excel по паркам'}
+            </span>
                     </Button>
                 </div>
             </div>
 
             <div className="flex-1 overflow-hidden relative">
                 <div className="h-full overflow-auto">
-                    <table className="min-w-full bg-background border border-border border-collapse border-gray-300 dark:border-gray-600">
+                    <table
+                        className="min-w-full bg-background border border-border border-collapse border-gray-300 dark:border-gray-600">
                         <thead className="bg-gray-100 dark:bg-gray-700 sticky top-0 z-10">
                         <tr>
                             {slvProcessTableHeaders.map((header, index) => {
@@ -440,7 +488,7 @@ const ProcessPage = () => {
                                             )}
                                         >
                                             {
-                                                isNumericColumn(header) ?
+                                                isFinancialColumns(header) ?
                                                     (Number(row[header]) || 0).toFixed(2) :
                                                     String(row[header] || '')
                                             }
