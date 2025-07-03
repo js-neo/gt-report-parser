@@ -101,7 +101,7 @@ const ProcessPage = () => {
         });
 
         worksheet.eachRow((row, rowNumber) => {
-            if (rowNumber === 1) return; // Пропускаем заголовок
+            if (rowNumber === 1) return;
 
             const rowData = row.values as Array<string | number | Date | null>;
             const processedRow: Partial<ProcessedRow> = {};

@@ -264,8 +264,7 @@ export default function Home() {
         let rows = [...data.rows];
 
         const timeColumnKey = Object.keys(columnMapping).find(key =>
-            columnMapping[key].toLowerCase().includes('время заказа')
-        );
+            columnMapping[key].toLowerCase().includes('время заказа'));
 
         const commentColumnKey = Object.keys(columnMapping).find(key =>
             columnMapping[key].toLowerCase().includes('комментарий'));
@@ -288,12 +287,15 @@ export default function Home() {
         const clientColumnKey = Object.keys(columnMapping).find(key =>
             columnMapping[key].toLowerCase().trim() === 'клиент');
 
+        const partnerColumnKey = Object.keys(columnMapping).find(key =>
+            columnMapping[key].toLowerCase().trim() === 'парк партнёр');
+
         const findTollPayments = (comment: string) => {
             if (!comment) return [];
 
             const tollRoadPatterns = [
                 {
-                    regex: /(платные? дороги?|платка|зсд)[^\d]*(\d+)\s*вкл/gi,
+                    regex: /(платные? дороги?|платка|зсд)\D*(\d+)\s*вкл/gi,
                     processMatch: (match: RegExpExecArray) => parseInt(match[2], 10)
                 },
                 {
@@ -304,7 +306,7 @@ export default function Home() {
 
             const parkingPatterns = [
                 {
-                    regex: /(платные? парковки?|парковка)[^\d]*(\d+)\s*вкл/gi,
+                    regex: /(платные? парковки?|парковка)\D*(\d+)\s*вкл/gi,
                     processMatch: (match: RegExpExecArray) => parseInt(match[2], 10)
                 }
             ];
@@ -435,7 +437,12 @@ export default function Home() {
 
                     const executor = executorPatterns.find(({test}) => test(comment))?.value;
 
-                    if (executor) processedRow[executorColumnKey] = executor;
+                    if (executor) {
+                        processedRow[executorColumnKey] = executor;
+                    }
+                    if (executor && partnerColumnKey) {
+                        processedRow[partnerColumnKey] = executor;
+                    }
                 }
             }
 
@@ -477,26 +484,33 @@ export default function Home() {
             return processedRow;
         });
 
-        if (partnerDataSPB || partnerDataMoscow) {
+        if ((partnerDataSPB || partnerDataMoscow) && partnerColumnKey) {
             const partnerMapping: Record<string, string> = {};
 
             [partnerDataSPB, partnerDataMoscow]
                 .filter((data): data is ExcelData => data !== null)
                 .forEach(data => {
-                data.rows.forEach(row => {
-                    const orderNumber = row['Номер заказа'];
-                    const partner = row['Партнер'];
-                    if (orderNumber && partner) {
-                        partnerMapping[String(orderNumber)] = String(partner);
-                    }
+                    data.rows.forEach(row => {
+                        const orderNumber = String(row['Номер заказа'] || '').trim();
+                        const partner = String(row['Партнер'] || '').trim();
+                        if (orderNumber && partner) {
+                            partnerMapping[orderNumber] = partner;
+                        }
+                    });
                 });
-            });
 
-            rows = rows.map(row => ({
-                ...row,
-                'Парк партнёр': partnerMapping[String(row['Номер заказа'])] || '',
-                'Доплата': row['Доплата'] || ''
-            }));
+            console.log(`Найдено ${Object.keys(partnerMapping).length} соответствий партнеров`);
+
+            rows = rows.map(row => {
+                const orderNumber = String(row['Номер заказа'] || '').trim();
+                const currentPartner = String(row[partnerColumnKey] || '').trim();
+
+                return {
+                    ...row,
+                    [partnerColumnKey]: currentPartner || partnerMapping[orderNumber],
+                    'Доплата': row['Доплата'] || ''
+                }
+            });
         }
 
         const processedData = {
