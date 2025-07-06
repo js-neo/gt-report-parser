@@ -174,6 +174,12 @@ const ProcessPage = () => {
         worksheet.eachRow((row: ExcelJS.Row, rowNumber) => {
             if (rowNumber === 1) return;
 
+            const isSapsan = row._isSapsan === true;
+            const isValueError = row._isValueError === true;
+            const rowFillColor = isValueError ?
+                'FFFFCCCC' : isSapsan ?
+                    'FFE6FFE6' : 'FFFFFFFF';
+
             row.eachCell((cell, colNumber) => {
                 const header = headers[colNumber - 1];
 
@@ -182,6 +188,11 @@ const ProcessPage = () => {
                     cell.value = isFinancialColumns(header) ? 0 : '';
                 }
 
+                cell.fill = {
+                    type: 'pattern',
+                    pattern: 'solid',
+                    fgColor: {argb: rowFillColor}
+                };
                 cell.font = {
                     size: 10,
                     name: 'Calibri'
@@ -349,7 +360,7 @@ const ProcessPage = () => {
             if (match) {
                 const amount = pattern.processMatch(match);
                 if (!isNaN(amount)) {
-                    console.log(`[toll_road] Найдено: "${match[0]}" (сумма: ${amount})`);
+                  //  console.log(`[toll_road] Найдено: "${match[0]}" (сумма: ${amount})`);
                     payments.push({
                         type: 'toll_road',
                         amount,
@@ -367,7 +378,7 @@ const ProcessPage = () => {
             if (match) {
                 const amount = pattern.processMatch(match);
                 if (!isNaN(amount)) {
-                    console.log(`[parking] Найдено: "${match[0]}" (сумма: ${amount})`);
+                   // console.log(`[parking] Найдено: "${match[0]}" (сумма: ${amount})`);
                     payments.push({
                         type: 'parking',
                         amount,
@@ -380,7 +391,7 @@ const ProcessPage = () => {
         });
 
         if (payments.length > 0) {
-            console.log('Итоговые платежи:', payments);
+            // console.log('Итоговые платежи:', payments);
         }
 
         return payments;
@@ -547,7 +558,6 @@ const ProcessPage = () => {
         };
     };
     const processedData = excelData ? processData(excelData) : null;
-    console.log("processedData: ", processedData);
 
     const dateRange = useMemo(() => {
         if (!processedData) return null;
@@ -586,11 +596,18 @@ const ProcessPage = () => {
         worksheet.addRow(data.headers);
 
         data.rows.forEach(row => {
+
             const rowData = data.headers.map(header => {
                 const value = row[header];
                 return value === null || value === undefined ? '' : value;
             });
-            worksheet.addRow(rowData);
+            const addedRow = worksheet.addRow(rowData);
+            if (row._isSapsan) {
+                addedRow._isSapsan = true;
+            }
+            if (row._isValueError) {
+                addedRow._isValueError = true;
+            }
         });
 
         applyWorksheetFormatting(worksheet, data.headers);

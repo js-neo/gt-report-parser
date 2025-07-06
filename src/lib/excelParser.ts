@@ -303,7 +303,10 @@ export const exportToExcel = async (data: ProcessedData, fileName: string) => {
 
             return value;
         });
+        console.log("rowData: ", rowData);
+        console.log("row: ", row);
         const addedRow = worksheet.addRow(rowData);
+        console.log("addedRow: ", addedRow);
         if (row._isSapsan) {
             addedRow._isSapsan = true;
         }
