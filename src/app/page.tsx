@@ -202,7 +202,7 @@ export default function Home() {
         >
             <div className={`flex items-center justify-center w-8 h-8 rounded-full ${
                 current ? 'bg-blue-500 text-white' :
-                    completed ? 'bg-green-500 text-white' : 'bg-gray-200'
+                    completed ? 'bg-green-500 text-white' : 'bg-gray-200 dark:bg-gray-500'
             }`}>
                 {completed ? <Check size={16}/> : stepNumber}
             </div>
@@ -451,7 +451,7 @@ export default function Home() {
                 const address = String(processedRow[addressColumnKey] || '');
                 const currentCost = Number(processedRow[costColumnKey]) || 0;
 
-                console.log(`Заказ ${processedRow['Номер заказа']} стоимость: ${currentCost}`);
+                // console.log(`Заказ ${processedRow['Номер заказа']} стоимость: ${currentCost}`);
 
                 const payments = findTollPayments(comment);
                 if (payments.length > 0) {
@@ -519,6 +519,7 @@ export default function Home() {
                 const processedRow: RowWithSapsanFlag = {};
                 const typedRow = row as RowWithSapsanFlag;
                 for (const [originalId, newName] of Object.entries(columnMapping)) {
+
                     if (row[originalId] instanceof Date) {
                         processedRow[newName] = formatDateTime(row[originalId] as Date);
                     } else {
@@ -585,7 +586,7 @@ export default function Home() {
     }
 
     return (
-        <div className="container mx-auto px-4 py-8">
+        <div className="container mx-auto px-4 py-8 dark:bg-gray-900">
             <h1 className="text-3xl font-bold mb-6">GT-Report Parser</h1>
 
             {!allFilesUploaded() ? (
@@ -605,7 +606,7 @@ export default function Home() {
                     {isSLVMode ? (
                         <div className="space-y-8">
                             <div
-                                className={`border p-6 rounded-lg transition-all ${currentStep === 'main-spb' ? 'border-blue-500 bg-blue-50' : 'border-gray-200'}`}>
+                                className={`border p-6 rounded-lg transition-all ${currentStep === 'main-spb' ? 'border-blue-500 bg-blue-50' : 'border-gray-200'} dark:bg-gray-700`}>
                                 <StepHeader
                                     completed={!!excelDataSPB}
                                     current={currentStep === 'main-spb'}
@@ -628,7 +629,7 @@ export default function Home() {
                             <ChevronRight className="mx-auto text-gray-400"/>
 
                             <div
-                                className={`border p-6 rounded-lg transition-all ${currentStep === 'partner-spb' ? 'border-blue-500 bg-blue-50' : 'border-gray-200'}`}>
+                                className={`border p-6 rounded-lg transition-all ${currentStep === 'partner-spb' ? 'border-blue-500 bg-blue-50' : 'border-gray-200'} dark:bg-gray-700`}>
                                 <StepHeader
                                     completed={!!partnerDataSPB}
                                     current={currentStep === 'partner-spb'}
@@ -661,7 +662,7 @@ export default function Home() {
                             <ChevronRight className="mx-auto text-gray-400"/>
 
                             <div
-                                className={`border p-6 rounded-lg transition-all ${currentStep === 'main-moscow' ? 'border-blue-500 bg-blue-50' : 'border-gray-200'}`}>
+                                className={`border p-6 rounded-lg transition-all ${currentStep === 'main-moscow' ? 'border-blue-500 bg-blue-50' : 'border-gray-200'} dark:bg-gray-700`}>
                                 <StepHeader
                                     completed={!!excelDataMoscow}
                                     current={currentStep === 'main-moscow'}
@@ -693,7 +694,7 @@ export default function Home() {
                             <ChevronRight className="mx-auto text-gray-400"/>
 
                             <div
-                                className={`border p-6 rounded-lg transition-all ${currentStep === 'partner-moscow' ? 'border-blue-500 bg-blue-50' : 'border-gray-200'}`}>
+                                className={`border p-6 rounded-lg transition-all ${currentStep === 'partner-moscow' ? 'border-blue-500 bg-blue-50' : 'border-gray-200'} dark:bg-gray-700`}>
                                 <StepHeader
                                     completed={!!partnerDataMoscow}
                                     current={currentStep === 'partner-moscow'}
@@ -741,16 +742,16 @@ export default function Home() {
                 <div className="space-y-6">
                     {isSLVMode && (
                         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                            <div className="border p-3 rounded-lg bg-green-50">
+                            <div className="border p-3 rounded-lg bg-green-50 dark:bg-green-300">
                                 <p className="text-sm font-medium">СПБ основной: ✅</p>
                             </div>
-                            <div className="border p-3 rounded-lg bg-green-50">
+                            <div className="border p-3 rounded-lg bg-green-50 dark:bg-green-300">
                                 <p className="text-sm font-medium">СПБ партнёр: ✅</p>
                             </div>
-                            <div className="border p-3 rounded-lg bg-green-50">
+                            <div className="border p-3 rounded-lg bg-green-50 dark:bg-green-300">
                                 <p className="text-sm font-medium">Москва основной: ✅</p>
                             </div>
-                            <div className="border p-3 rounded-lg bg-green-50">
+                            <div className="border p-3 rounded-lg bg-green-50 dark:bg-green-300">
                                 <p className="text-sm font-medium">Москва партнёр: ✅</p>
                             </div>
                         </div>

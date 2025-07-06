@@ -69,6 +69,7 @@ export const FileUpload = ({ onUploadAction, acceptOnly }: FileUploadProps) => {
                 <FileUp className="w-12 h-12 text-primary" />
                 <div>
                     <Button variant="outline"
+                            className="dark:hover:bg-gray-800"
                             size="lg"
                             tooltip={acceptOnly ? `Обязательные колонки: ${acceptOnly.join(', ')}` : undefined}>
                         Выберите файл

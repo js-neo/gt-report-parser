@@ -599,7 +599,7 @@ export default function PreviewPage() {
     }
 
     return (
-        <div className="container mx-auto px-4 py-8 flex flex-col h-[calc(100vh-1rem)]">
+        <div className="container mx-auto px-4 py-8 flex flex-col h-[calc(100vh-1rem)] dark:bg-gray-900">
             <div className="flex justify-between items-center mb-6">
                 <div>
                     <h1 className="text-3xl font-bold">Предпросмотр таблицы</h1>
@@ -627,7 +627,7 @@ export default function PreviewPage() {
                             ...tableData,
                             rows: filteredRows
                         }, getReportFileName())}
-                        className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white"
+                        className="flex items-center gap-2 bg-green-600 hover:bg-green-700 dark:bg-green-700 dark:hover:bg-green-800 text-white"
                     >
                         <span className="flex"><FileUp className="w-4 mr-1"/>Экспорт в Excel</span>
                     </Button>
@@ -645,7 +645,7 @@ export default function PreviewPage() {
                 )}
                 <div className="h-full overflow-auto">
                     <table
-                        className="min-w-full bg-background border border-border border-collapse border-gray-300 dark:border-gray-600">
+                        className="min-w-full bg-background border border-border border-collapse border-gray-300 dark:border-gray-600 dark:bg-gray-800">
                         <thead className="bg-gray-100 dark:bg-gray-700 sticky top-0 z-10">
                         <tr>
                             {tableData.headers.map((header, index) => {
