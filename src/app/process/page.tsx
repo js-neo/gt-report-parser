@@ -23,6 +23,36 @@ interface GroupData {
     city?: 'spb' | 'msk';
 }
 
+interface FontStyle {
+    charset?: number;
+    color?: { argb: string };
+    family?: number;
+    name?: string;
+    scheme?: string;
+    size?: number;
+    bold?: boolean;
+    italic?: boolean;
+    underline?: boolean;
+}
+
+interface RichTextItem {
+    text?: string;
+    font?: FontStyle
+}
+
+interface RichTextObject {
+    richText?: RichTextItem[];
+}
+
+type CellValue =
+    | string
+    | number
+    | Date
+    | boolean
+    | RichTextObject
+    | null
+    | undefined;
+
 const ProcessPage = () => {
     const [excelData, setExcelData] = useState<ExcelData | null>(null);
     const [isProcessing, setIsProcessing] = useState(false);
@@ -67,6 +97,7 @@ const ProcessPage = () => {
     const numericColumns = ['Номер заказа'];
     const dateColumns = ['Время заказа'];
     const financialColumns = ['Стоимость', 'Комиссия', 'Доплата', 'К выплате'];
+    const commentColumns = ['Комментарий'];
 
     const isFinancialColumns = (header: string) => {
         return financialColumns.some(financialHeader =>
@@ -85,6 +116,13 @@ const ProcessPage = () => {
             header.toLowerCase().includes(numericHeader.toLowerCase())
         );
     };
+
+    const isCommenticColumns = (header: string) => {
+        return commentColumns.some(commentColumns =>
+            header.toLowerCase().includes(commentColumns.toLowerCase())
+        );
+    };
+
 
     function getColumnLetter(columnIndex: number): string {
         let letter = '';
@@ -348,6 +386,54 @@ const ProcessPage = () => {
         return payments;
     };
 
+    function isRichTextObject(value: unknown): value is RichTextObject {
+        return typeof value === 'object' &&
+            value !== null &&
+            'richText' in value &&
+            Array.isArray((value as RichTextObject).richText);
+    }
+
+    function getTextStyle(font?: RichTextItem['font']): React.CSSProperties {
+        if (!font) return {};
+
+        const style: React.CSSProperties = {};
+
+        if (font.color?.argb) {
+            style.color = `#${font.color.argb.slice(2)}${font.color.argb.slice(0, 2)}`;
+        }
+        if (font.bold) style.fontWeight = 'bold';
+        if (font.italic) style.fontStyle = 'italic';
+        if (font.size) style.fontSize = `${font.size}pt`;
+
+        return style;
+    }
+
+
+    interface RichTextDisplayProp {
+        value: CellValue;
+    }
+    const RichTextDisplay: React.FC<RichTextDisplayProp> = ({ value }) => {
+        if (value === null || value === undefined) return null;
+
+        if (isRichTextObject(value)) {
+            const richText = value.richText?.filter((item) => item.text?.trim()) || [];
+            return (
+                <div className='whitespace-pre-line'>
+                    {richText.map((item, index) => {
+                        return (
+                            <p key={index}
+                               className='mb-1 last:mb-0'
+                               style={getTextStyle(item.font)}>
+                            {item.text}
+                        </p>)
+                    })}
+                </div>
+            );
+        }
+
+        return <div>{String(value)}</div>;
+    };
+
     const processData = (data: ExcelData): { headers: string[]; rows: ProcessedRow[] } => {
         const headerMap: Record<string, string> = {};
 
@@ -374,7 +460,7 @@ const ProcessPage = () => {
             h.toLowerCase().includes('стоимость'));
 
         const processedRows: ProcessedRow[] = data.rows.map(row => {
-            const newRow: Record<string, string | number | Date | boolean | null> = {};
+            const newRow: Record<string, CellValue> = {};
             if (!("_isSapsan" in row)) {
                 newRow._isSapsan = false;
                 if (commentColumnKey) {
@@ -418,18 +504,6 @@ const ProcessPage = () => {
                 ? COMMISSION_RATES.SPB : city === 'msk'
                     ? COMMISSION_RATES.MSK : COMMISSION_RATES.DEFAULT;
 
-            function isRichTextObject(value: unknown): value is {richText?: Array<{text: string}>} {
-                return typeof value === 'object' && value !== null && 'richText' in value;
-            }
-
-            function extractRichText(value: { richText?: Array<{ text?: string }> }): string {
-                if (!value.richText) return '';
-
-                return value.richText
-                    .map(item => item.text || '')
-                    .filter(text => text.trim())
-                    .join('\n');
-            }
 
             Object.entries(headerMap).forEach(([targetHeader, sourceHeader]) => {
                 const value = row[sourceHeader];
@@ -441,7 +515,7 @@ const ProcessPage = () => {
                 } else if (typeof value === 'string' || typeof value === 'number') {
                     newRow[targetHeader] = value;
                 } else if (isRichTextObject(value)) {
-                    newRow[targetHeader] = extractRichText(value);
+                    newRow[targetHeader] = value;
                 } else {
                     console.log("typeof value: ", typeof value);
                     newRow[targetHeader] = String(value);
@@ -473,6 +547,7 @@ const ProcessPage = () => {
         };
     };
     const processedData = excelData ? processData(excelData) : null;
+    console.log("processedData: ", processedData);
 
     const dateRange = useMemo(() => {
         if (!processedData) return null;
@@ -726,13 +801,15 @@ const ProcessPage = () => {
                                             className={cn(
                                                 "px-1 py-2 text-sm text-center text-foreground border border-border",
                                                 "border-gray-300 dark:border-gray-600",
-                                                isWide ? "max-w-[400px] min-w-[400px] break-words whitespace-normal" :
-                                                    "max-w-[150px] min-w-[80px] break-words whitespace-normal"
+                                                isWide ? "max-w-[400px] min-w-[400px]" : "max-w-[150px] min-w-[80px]",
+                                                isCommenticColumns(header) ? "text-left whitespace-pre-line" : "break-words whitespace-normal"
                                             )}
                                         >
                                             {
                                                 isFinancialColumns(header) ?
                                                     (Number(row[header]) || 0).toFixed(2) :
+                                                        isCommenticColumns(header) ?
+                                                            <RichTextDisplay value={row[header]}/> :
                                                     String(row[header] || '')
                                             }
                                         </td>
