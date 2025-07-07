@@ -13,7 +13,6 @@ import {Button} from "@/components/UI/Button";
 interface ProcessedRow extends Record<string, string | number | boolean | null> {
     _parkPartner: string;
     _isSapsan: boolean;
-    _isValueError: boolean;
 }
 
 interface GroupData {
@@ -62,17 +61,6 @@ const ProcessPage = () => {
         MSK: 0.27,
         DEFAULT: 0
     } as const;
-
-    const minRateSPB = {
-        base: 2250
-    };
-
-    const minRateMSK = {
-        base: 3200,
-        domodedovo: 4100,
-        gukovskiy: 4500,
-        port_port: 6000
-    };
 
     const slvProcessTableHeaders = [
         'Номер заказа', 'Время заказа', 'Стоимость', 'Комиссия',
@@ -175,9 +163,7 @@ const ProcessPage = () => {
             if (rowNumber === 1) return;
 
             const isSapsan = row._isSapsan === true;
-            const isValueError = row._isValueError === true;
-            const rowFillColor = isValueError ?
-                'FFFFCCCC' : isSapsan ?
+            const rowFillColor = isSapsan ?
                     'FFE6FFE6' : 'FFFFFFFF';
 
             row.eachCell((cell, colNumber) => {
@@ -259,30 +245,80 @@ const ProcessPage = () => {
         });
 
         const lastDataRow = worksheet.rowCount;
-        const totalRow = worksheet.addRow(['', '', '', '', '', '']);
+        const totalRow1 = worksheet.addRow(['', '', '', '', '', '']);
+        const totalRow2 = worksheet.addRow(['', '', '', '', '', '']);
+        const totalRow3 = worksheet.addRow(['', '', '', '', '', '']);
+        const totalRow4 = worksheet.addRow(['', '', '', '', '', '']);
 
-        totalRow.eachCell({includeEmpty: false}, (cell) => {
-            cell.font = {
-                bold: true,
-                size: 10,
-                name: 'Calibri'
-            };
-            cell.alignment = {
-                vertical: 'middle',
-                horizontal: 'center',
-                wrapText: true
-            };
+
+        [totalRow1, totalRow2, totalRow3, totalRow4].forEach((row) => {
+            row.eachCell({includeEmpty: false}, (cell) => {
+                cell.font = {
+                    size: 10,
+                    name: 'Calibri'
+                };
+                cell.alignment = {
+                    vertical: 'middle',
+                    horizontal: 'center',
+                    wrapText: true
+                };
+            });
         });
 
 
         const payoutIndex = headers.findIndex(h => h === 'К выплате');
+        const extraPayIndex = headers.findIndex(h => h === 'Доплата');
         if (payoutIndex >= 0) {
-            totalRow.getCell(payoutIndex + 1).value = {
+            totalRow1.getCell(payoutIndex + 1).value = {
                 formula: `SUM(${getColumnLetter(payoutIndex)}2:${getColumnLetter(payoutIndex)}${lastDataRow})`
             };
         } else {
             console.error('Колонка "К выплате" не найдена для итоговой строки');
         }
+
+        if (extraPayIndex >= 0 && payoutIndex >= 0) {
+            totalRow2.getCell(extraPayIndex + 1).value = 'наличные';
+            const payoutCell = totalRow2.getCell(payoutIndex + 1);
+            payoutCell.value = 0;
+            payoutCell.numFmt = '#,##0.00';
+            payoutCell.fill = {
+                type: 'pattern',
+                pattern: 'solid',
+                fgColor: {argb: 'FFEBF1DE'}
+            };
+            totalRow2.getCell(extraPayIndex + 1).fill = {
+                type: 'pattern',
+                pattern: 'solid',
+                fgColor: {argb: 'FFEBF1DE'}
+            };
+        }
+
+        if (extraPayIndex >= 0 && payoutIndex >= 0) {
+            totalRow3.getCell(extraPayIndex + 1).value = 'штраф';
+            const payoutCell = totalRow3.getCell(payoutIndex + 1);
+            payoutCell.value = 0;
+            payoutCell.numFmt = '#,##0.00';
+            payoutCell.fill = {
+                type: 'pattern',
+                pattern: 'solid',
+                fgColor: {argb: 'FFFDE9D9'}
+            };
+            totalRow3.getCell(extraPayIndex + 1).fill = {
+                type: 'pattern',
+                pattern: 'solid',
+                fgColor: {argb: 'FFFDE9D9'}
+            };
+        }
+
+        if (extraPayIndex >= 0 && payoutIndex >= 0) {
+            totalRow4.getCell(extraPayIndex + 1).value = 'ИТОГО:';
+            const payoutCell = totalRow4.getCell(payoutIndex + 1);
+            payoutCell.value = {
+                formula: `SUM(${getColumnLetter(payoutIndex)}${lastDataRow + 1}:${getColumnLetter(payoutIndex)}${lastDataRow + 3})`,
+            };
+            payoutCell.numFmt = '#,##0.00';
+        }
+
     };
 
 
@@ -305,96 +341,6 @@ const ProcessPage = () => {
         if (addressLower.includes('москва')) return 'msk';
         if (addressLower.includes('санкт-петербург') || addressLower.includes('спб')) return 'spb';
         return null;
-    };
-
-    const handleString = (str: string) => {
-        const [, aPart, bPart] = str.split(/A\)|B\)/);
-        const pointA = aPart?.trim().replace(/;$/, '') ?? '';
-        const pointB = bPart?.trim().replace(/;$/, '') ?? '';
-        return {pointA, pointB};
-    };
-
-    const getMoscowMinRate = (address: string) => {
-        const {pointA, pointB} = handleString(address);
-        const pointALower = pointA.toLowerCase();
-        const pointBLower = pointB.toLowerCase();
-
-        if (pointALower.includes('аэропорт') && pointBLower.includes('аэропорт')) {
-            return minRateMSK.port_port;
-        }
-        if (pointALower.includes('домодедово') || pointBLower.includes('домодедово')) {
-            return minRateMSK.domodedovo;
-        }
-        if (pointALower.includes('жуковский') || pointBLower.includes('жуковский')) {
-            return minRateMSK.gukovskiy;
-        }
-        return minRateMSK.base;
-    };
-
-    const findTollPayments = (comment: string) => {
-        if (!comment) return [];
-
-        const tollRoadPatterns = [
-            {
-                regex: /(платные? дороги?|платка|зсд)\D*(\d+)\s*вкл/gi,
-                processMatch: (match: RegExpExecArray) => parseInt(match[2], 10)
-            },
-            {
-                regex: /зсд\/\+\s*(\d+)\s*зсд\s*вкл/gi,
-                processMatch: (match: RegExpExecArray) => parseInt(match[1], 10)
-            }
-        ];
-
-        const parkingPatterns = [
-            {
-                regex: /(платные? парковки?|парковка)\D*(\d+)\s*вкл/gi,
-                processMatch: (match: RegExpExecArray) => parseInt(match[2], 10)
-            }
-        ];
-
-        const payments: { type: string; amount: number, match: string }[] = [];
-
-        tollRoadPatterns.some(pattern => {
-            const regex = new RegExp(pattern.regex.source, pattern.regex.flags);
-            const match = regex.exec(comment);
-            if (match) {
-                const amount = pattern.processMatch(match);
-                if (!isNaN(amount)) {
-                  //  console.log(`[toll_road] Найдено: "${match[0]}" (сумма: ${amount})`);
-                    payments.push({
-                        type: 'toll_road',
-                        amount,
-                        match: match[0]
-                    });
-                    return true;
-                }
-            }
-            return false;
-        });
-
-        parkingPatterns.some(pattern => {
-            const regex = new RegExp(pattern.regex.source, pattern.regex.flags);
-            const match = regex.exec(comment);
-            if (match) {
-                const amount = pattern.processMatch(match);
-                if (!isNaN(amount)) {
-                   // console.log(`[parking] Найдено: "${match[0]}" (сумма: ${amount})`);
-                    payments.push({
-                        type: 'parking',
-                        amount,
-                        match: match[0]
-                    });
-                    return true;
-                }
-            }
-            return false;
-        });
-
-        if (payments.length > 0) {
-            // console.log('Итоговые платежи:', payments);
-        }
-
-        return payments;
     };
 
     function isRichTextObject(value: unknown): value is RichTextObject {
@@ -423,7 +369,8 @@ const ProcessPage = () => {
     interface RichTextDisplayProp {
         value: CellValue;
     }
-    const RichTextDisplay: React.FC<RichTextDisplayProp> = ({ value }) => {
+
+    const RichTextDisplay: React.FC<RichTextDisplayProp> = ({value}) => {
         if (value === null || value === undefined) return null;
 
         if (isRichTextObject(value)) {
@@ -435,8 +382,8 @@ const ProcessPage = () => {
                             <p key={index}
                                className='mb-1 last:mb-0'
                                style={getTextStyle(item.font)}>
-                            {item.text}
-                        </p>)
+                                {item.text}
+                            </p>)
                     })}
                 </div>
             );
@@ -463,12 +410,9 @@ const ProcessPage = () => {
         const addressColumnKey = data.headers.find(h =>
             h.toLowerCase().includes('адрес'));
         const parkPartnerHeader = data.headers.find(h =>
-            h.toLowerCase().includes('парк партнёр')
-        );
+            h.toLowerCase().includes('парк партнёр'));
         const commentColumnKey = data.headers.find(h =>
             h.toLowerCase().includes('комментарий'));
-        const costColumnKey = data.headers.find(h =>
-            h.toLowerCase().includes('стоимость'));
 
         const processedRows: ProcessedRow[] = data.rows.map(row => {
             const newRow: Record<string, CellValue> = {};
@@ -479,32 +423,6 @@ const ProcessPage = () => {
 
                     if (comment.includes('сапсан наличные')) {
                         newRow._isSapsan = true;
-                    }
-                }
-            }
-
-            if (!("_isValueError" in row)) {
-                newRow._isValueError = false;
-                if (commentColumnKey && addressColumnKey && costColumnKey && !newRow._isSapsan) {
-                    const comment = String(row[commentColumnKey] || '');
-                    const address = String(row[addressColumnKey] || '');
-                    const currentCost = Number(row[costColumnKey]) || 0;
-
-                    const payments = findTollPayments(comment);
-                    if (payments.length > 0) {
-                        const city = getCityFromAddress(address);
-                        const minRate = city === 'spb' ? minRateSPB.base : getMoscowMinRate(address);
-                        if (!city) {
-                            newRow._isValueError = true;
-                        } else if (currentCost < minRate) {
-                            newRow._isValueError = true;
-                        }
-
-                    } else if (
-                        /(платные? дороги?|платка|зсд|платные? парковки?|парковка)/i.test(comment) &&
-                        !/вкл/i.test(comment)
-                    ) {
-                        newRow._isValueError = true;
                     }
                 }
             }
@@ -604,9 +522,6 @@ const ProcessPage = () => {
             const addedRow = worksheet.addRow(rowData);
             if (row._isSapsan) {
                 addedRow._isSapsan = true;
-            }
-            if (row._isValueError) {
-                addedRow._isValueError = true;
             }
         });
 
@@ -825,9 +740,9 @@ const ProcessPage = () => {
                                             {
                                                 isFinancialColumns(header) ?
                                                     (Number(row[header]) || 0).toFixed(2) :
-                                                        isCommenticColumns(header) ?
-                                                            <RichTextDisplay value={row[header]}/> :
-                                                    String(row[header] || '')
+                                                    isCommenticColumns(header) ?
+                                                        <RichTextDisplay value={row[header]}/> :
+                                                        String(row[header] || '')
                                             }
                                         </td>
                                     );
