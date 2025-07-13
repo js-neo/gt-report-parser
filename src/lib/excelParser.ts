@@ -1,6 +1,6 @@
 // src/lib/excelParser.ts
 
-import ExcelJS, { Row } from 'exceljs';
+import ExcelJS, {Row} from 'exceljs';
 import Papa from 'papaparse';
 import type {ExcelData, ColumnConfig, ProcessedData} from './types';
 import {parseDateTime} from "@/utils";
@@ -70,9 +70,12 @@ const applyWorksheetFormatting = (worksheet: ExcelJS.Worksheet, headers: string[
         if (rowNumber === 1) return;
         const isSapsan = row._isSapsan === true;
         const isValueError = row._isValueError === true;
-        const rowFillColor = isValueError ?
-            'FFFFCCCC' : isSapsan ?
-            'FFE6FFE6' : 'FFFFFFFF';
+        const isAddressError = row._isAddressError === true;
+        const rowFillColor =
+            isValueError ? 'FFFFCCCC' :
+            isSapsan ? 'FFE6FFE6' :
+            isAddressError ? 'FFFFB366' :
+            'FFFFFFFF';
 
         row.eachCell((cell, colNumber) => {
             const header = headers[colNumber - 1];

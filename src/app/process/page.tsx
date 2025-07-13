@@ -13,6 +13,7 @@ import {Button} from "@/components/UI/Button";
 interface ProcessedRow extends Record<string, string | number | boolean | null> {
     _parkPartner: string;
     _isSapsan: boolean;
+    _isAddressError: boolean;
 }
 
 interface GroupData {
@@ -163,8 +164,11 @@ const ProcessPage = () => {
             if (rowNumber === 1) return;
 
             const isSapsan = row._isSapsan === true;
-            const rowFillColor = isSapsan ?
-                    'FFE6FFE6' : 'FFFFFFFF';
+            const isAddressError = row._isAddressError === true;
+            const rowFillColor =
+                isSapsan ? 'FFE6FFE6' :
+                    isAddressError ? 'FFFFB366' :
+                        'FFFFFFFF';
 
             row.eachCell((cell, colNumber) => {
                 const header = headers[colNumber - 1];
@@ -335,11 +339,20 @@ const ProcessPage = () => {
         return header.toLowerCase().includes('время');
     };
 
+    const MSK_CITY_KEYWORDS = ['москва', 'московская область'] as const;
+    const SPB_CITY_KEYWORDS = ['санкт-петербург', 'спб', 'ленинградская область', 'пулково'] as const;
+
+    const isCity = (keywords: readonly string[], address: string) =>
+        keywords.some(keyword => address.includes(keyword));
+
     const getCityFromAddress = (address: string): 'spb' | 'msk' | null => {
         if (!address) return null;
-        const addressLower = address.toLowerCase();
-        if (addressLower.includes('москва')) return 'msk';
-        if (addressLower.includes('санкт-петербург') || addressLower.includes('спб')) return 'spb';
+
+        const normalizedAddress = address.toLowerCase();
+
+        if (isCity(MSK_CITY_KEYWORDS, normalizedAddress)) return 'msk';
+        if (isCity(SPB_CITY_KEYWORDS, normalizedAddress)) return 'spb';
+
         return null;
     };
 
@@ -429,6 +442,11 @@ const ProcessPage = () => {
 
             const address = addressColumnKey ? String(row[addressColumnKey] || '') : '';
             const city = getCityFromAddress(address);
+
+            if (!("_isAddressError" in row)) {
+                newRow._isAddressError = !city;
+            }
+
             const percentCity = city == 'spb'
                 ? COMMISSION_RATES.SPB : city === 'msk'
                     ? COMMISSION_RATES.MSK : COMMISSION_RATES.DEFAULT;
@@ -470,12 +488,16 @@ const ProcessPage = () => {
             } as ProcessedRow;
         });
 
+
+
         return {
             headers: slvProcessTableHeaders,
             rows: processedRows
         };
     };
     const processedData = excelData ? processData(excelData) : null;
+
+    console.log("_____processedData_____: ", processedData);
 
     const dateRange = useMemo(() => {
         if (!processedData) return null;
@@ -522,6 +544,10 @@ const ProcessPage = () => {
             const addedRow = worksheet.addRow(rowData);
             if (row._isSapsan) {
                 addedRow._isSapsan = true;
+            }
+
+            if (row._isAddressError) {
+                addedRow._isAddressError = true;
             }
         });
 
@@ -722,7 +748,7 @@ const ProcessPage = () => {
                             <tr
                                 key={rowIndex}
                                 className={cn(row._isSapsan && 'bg-green-100 dark:bg-green-900',
-                                    row._isValueError && 'bg-red-100 dark:bg-red-900')}
+                                    row._isAddressError && 'bg-orange-200 dark:bg-orange-900')}
                             >
                                 {slvProcessTableHeaders.map((header, colIndex) => {
                                     const isWide = header.toLowerCase().includes('адрес') ||

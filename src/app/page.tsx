@@ -64,11 +64,20 @@ export default function Home() {
         }
     }, []);
 
+    const MSK_CITY_KEYWORDS = ['москва', 'московская область'] as const;
+    const SPB_CITY_KEYWORDS = ['санкт-петербург', 'спб', 'ленинградская область', 'пулково'] as const;
+
+    const isCity = (keywords: readonly string[], address: string) =>
+        keywords.some(keyword => address.includes(keyword));
+
     const getCityFromAddress = (address: string): 'spb' | 'msk' | null => {
         if (!address) return null;
-        const addressLower = address.toLowerCase();
-        if (addressLower.includes('москва')) return 'msk';
-        if (addressLower.includes('санкт-петербург') || addressLower.includes('спб')) return 'spb';
+
+        const normalizedAddress = address.toLowerCase();
+
+        if (isCity(MSK_CITY_KEYWORDS, normalizedAddress)) return 'msk';
+        if (isCity(SPB_CITY_KEYWORDS, normalizedAddress)) return 'spb';
+
         return null;
     };
 
@@ -376,10 +385,19 @@ export default function Home() {
 
         rows = rows.map(row => {
 
-            const processedRow: RowWithSapsanFlag = {...row, _isSapsan: false, _isValueError: false};
+            const processedRow: RowWithSapsanFlag = {...row, _isSapsan: false, _isValueError: false, _isAddressError: false};
 
             if (clientColumnKey) {
                 processedRow[clientColumnKey] = '';
+            }
+
+            if (addressColumnKey) {
+                const address = String(processedRow[addressColumnKey] || '');
+                const city = getCityFromAddress(address);
+
+                if (!city) {
+                    processedRow._isAddressError = true;
+                }
             }
 
             if (commentColumnKey && row[commentColumnKey]) {
@@ -458,7 +476,6 @@ export default function Home() {
                     const city = getCityFromAddress(address);
 
                     if (!city) {
-                        processedRow._isValueError = true;
                         return processedRow;
                     }
 
@@ -528,6 +545,7 @@ export default function Home() {
                 }
                 processedRow._isSapsan = typedRow._isSapsan;
                 processedRow._isValueError = typedRow._isValueError;
+                processedRow._isAddressError = typedRow._isAddressError;
                 return processedRow;
             }),
             initialSort: timeColumnKey ? {

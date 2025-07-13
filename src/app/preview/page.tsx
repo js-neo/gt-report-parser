@@ -679,7 +679,8 @@ export default function PreviewPage() {
                             <tr
                                 key={rowIndex}
                                 className={cn(row._isSapsan && 'bg-green-100 dark:bg-green-900',
-                                    row._isValueError && 'bg-red-100 dark:bg-red-900')}
+                                    row._isValueError && 'bg-red-100 dark:bg-red-900',
+                                    row._isAddressError && 'bg-orange-200 dark:bg-orange-900')}
                             >
                                 {tableData.headers.map((header, colIndex) => (
                                     <td
